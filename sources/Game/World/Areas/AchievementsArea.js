@@ -120,23 +120,18 @@ export class AchievementsArea extends Area
         // Particles
         {
             const reference = this.references.items.get('waterfallParticles')[0]
-            if(reference.parent) reference.removeFromParent()
-
-            // Defensive: ensure geometry and position attribute exist
-            let origin, destination
-            if(reference.geometry && reference.geometry.attributes && reference.geometry.attributes.position && reference.geometry.attributes.position.array && reference.geometry.attributes.position.array.length >= 6)
-            {
-                const pos = reference.geometry.attributes.position.array
-                origin = new THREE.Vector3(pos[0], pos[1], pos[2])
-                destination = new THREE.Vector3(pos[3], pos[4], pos[5])
-            }
-            else
-            {
-                // Fallback: use object's world position and a point 1 unit forward
-                origin = new THREE.Vector3()
-                reference.getWorldPosition(origin)
-                destination = origin.clone().add(new THREE.Vector3(0, 0, -1))
-            }
+            reference.removeFromParent()
+            
+            const origin = new THREE.Vector3(
+                reference.geometry.attributes.position.array[0],
+                reference.geometry.attributes.position.array[1],
+                reference.geometry.attributes.position.array[2]
+            )
+            const destination = new THREE.Vector3(
+                reference.geometry.attributes.position.array[3],
+                reference.geometry.attributes.position.array[4],
+                reference.geometry.attributes.position.array[5]
+            )
             origin.applyMatrix4(reference.matrixWorld)
             destination.applyMatrix4(reference.matrixWorld)
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu'
 import { Game } from '../../Game.js'
+import { InteractivePoints } from '../../InteractivePoints.js'
 import { attribute, clamp, color, float, Fn, instancedArray, instanceIndex, luminance, max, min, mix, smoothstep, step, texture, uniform, uv, varying, vec2, vec3, vec4 } from 'three/tsl'
 import gsap from 'gsap'
 import { alea } from 'seedrandom'
@@ -34,6 +35,8 @@ export class AltarArea extends Area
         this.setDeathZone()
         this.setData()
         this.setAchievement()
+        this.setPoiHouse()
+
 
         // Offline counter
         if(!this.game.server.connected)
@@ -513,4 +516,272 @@ export class AltarArea extends Area
             this.game.achievements.setProgress('areas', 'altar')
         })
     }
+
+    setPoiHouse()
+    {
+        // 👇 Cambia este nombre si tu modal tiene otro data-name=""
+        // Ej: <div class="js-modal modal ..." data-name="poi-house">
+        const MODAL_NAME = 'poi-house'
+
+        // 👇 Nombres posibles del empty en Blender (usa el tuyo primero)
+        const POINT_NAMES = [
+            'refPoiHouse01InteractivePoint',
+            'refPoiHouse01Interac',
+            'refPoiHouse01Interactive',
+            'refPoiHouseInteractivePoint',
+            'poi_house_interactive_point',
+        ]
+
+        // Buscar el empty/objeto dentro del modelo del altar
+        let point = null
+        for(const n of POINT_NAMES)
+        {
+            point = this.model.getObjectByName?.(n)
+            if(point) break
+        }
+
+        // Try to find the point inside the original GLB resource (resource node keeps children)
+        let resourceNode = null
+        try
+        {
+            resourceNode = this.game.resources && this.game.resources.areasModel && this.game.resources.areasModel.scene
+                ? this.game.resources.areasModel.scene.getObjectByName(this.model.name)
+                : null
+        }
+        catch(e)
+        {
+            resourceNode = null
+        }
+
+        if(resourceNode)
+        {
+            for(const n of POINT_NAMES)
+            {
+                const found = resourceNode.getObjectByName?.(n)
+                if(found)
+                {
+                    point = found
+                    break
+                }
+            }
+
+            // loose match on resource node
+            if(!point)
+            {
+                const targets = POINT_NAMES.map((n) => n.toLowerCase())
+                resourceNode.traverse((o) =>
+                {
+                    if(point || !o?.name) return
+                    const name = o.name.toLowerCase()
+                    if(targets.includes(name)) point = o
+                })
+            }
+
+            if(!point)
+            {
+                resourceNode.traverse((o) =>
+                {
+                    if(point || !o?.name) return
+                    const name = o.name.toLowerCase()
+                    if(/refpoi|poihouse|poi_house|refpoihouse|house_interactive|interactive_point|refpoihouse/i.test(name))
+                        point = o
+                })
+            }
+        }
+        else
+        {
+            // fallback to searching the (possibly emptied) model in scene
+            const targets = POINT_NAMES.map((n) => n.toLowerCase())
+            this.model.traverse((o) =>
+            {
+                if(point || !o?.name) return
+                const name = o.name.toLowerCase()
+                if(targets.includes(name)) point = o
+            })
+        }
+
+        let position = new THREE.Vector3()
+
+        if(!point)
+        {
+            console.warn('[AltarArea] No encontré el punto interactivo de la casa. Usando fallback: centro del modelo.')
+            // Fallback: try to use the resource node house mesh center (preferred), otherwise bbox
+            let houseMeshName = null
+            if(resourceNode)
+            {
+                resourceNode.traverse((o) =>
+                {
+                    if(houseMeshName || !o?.name) return
+                    const n = o.name.toLowerCase()
+                    if(n.startsWith('house_mesh')) houseMeshName = o.name
+                })
+            }
+
+            if(houseMeshName)
+            {
+                // try to get the actual mesh currently in the scene (objects.addFromModel moves models into scene)
+                const sceneMesh = this.game.scene.getObjectByName(houseMeshName)
+                if(sceneMesh)
+                {
+                    sceneMesh.getWorldPosition(position)
+                }
+                else
+                {
+                    // fallback to resource bbox
+                    const box = new THREE.Box3().setFromObject(resourceNode || this.model)
+                    if(!box.isEmpty()) box.getCenter(position)
+                    else position.copy(this.position)
+                }
+            }
+            else
+            {
+                // Fallback: usar el centro del bounding box del modelo o la posición conocida del altar
+                const box = new THREE.Box3().setFromObject(this.model)
+                if(!box.isEmpty())
+                {
+                    box.getCenter(position)
+                    // Transform to world space
+                    position.applyMatrix4(this.model.matrixWorld)
+                }
+                else
+                {
+                    // Último recurso: usar la posición del altar registrada previamente
+                    position.copy(this.position)
+                }
+            }
+        }
+        else
+        {
+            // Posición en mundo (más seguro que usar .position a secas)
+            point.getWorldPosition(position)
+        }
+
+        // Crear InteractivePoint (esto ya maneja ENTER / botón Interact automáticamente)
+        this.poiHouseInteractivePoint = this.game.interactivePoints.create(
+            position,
+            'Casa', // lo que aparece al acercarte
+            InteractivePoints.ALIGN_LEFT,
+            InteractivePoints.STATE_CONCEALED,
+            () =>
+            {
+                // abre tu modal ya creado
+                this.game.modals.open(MODAL_NAME)
+            },
+            () =>
+            {
+                // opcional: si quieres hacer algo cuando aparece el "Casa"
+                // console.log('[AltarArea] POI Casa: reveal')
+            },
+            () =>
+            {
+                // opcional: cuando te alejas
+                // console.log('[AltarArea] POI Casa: conceal')
+            }
+        )
+
+        // DEBUG: mostrar info del POI creado
+        console.log('[AltarArea] poiHouseInteractivePoint created:', !!this.poiHouseInteractivePoint, this.poiHouseInteractivePoint)
+
+        // En modo debug forzamos que se muestre para comprobar posición/visible
+        if(this.game.debug && this.game.debug.active)
+        {
+            try
+            {
+                this.poiHouseInteractivePoint.show()
+                console.log('[AltarArea] poiHouseInteractivePoint.show() called (debug)')
+            }
+            catch(e)
+            {
+                console.warn('[AltarArea] error forcing POI show:', e)
+            }
+        }
+
+        // Inspect house meshes: list info and add visible markers/material fixes (always run to help debugging)
+        try
+        {
+            const houseChildren = []
+            this.model.traverse((o) =>
+            {
+                if(!o || !o.name) return
+                const n = o.name.toLowerCase()
+                if(n.startsWith('house_mesh') || n.includes('house_mesh') || n.includes('house'))
+                    houseChildren.push(o)
+            })
+
+            console.log('[AltarArea] house children count:', houseChildren.length)
+
+            for(const m of houseChildren)
+            {
+                // Get world position
+                const worldPos = new THREE.Vector3()
+                try { m.getWorldPosition(worldPos) } catch(e) { worldPos.copy(this.position) }
+
+                // Geometry attrs (if mesh)
+                let attrs = null
+                try { attrs = m.geometry && m.geometry.attributes ? Object.keys(m.geometry.attributes) : null } catch(e) { attrs = null }
+
+                // Bounding box
+                let bbox = null
+                try
+                {
+                    const box = new THREE.Box3().setFromObject(m)
+                    bbox = { min: box.min.clone(), max: box.max.clone(), isEmpty: box.isEmpty() }
+                }
+                catch(e)
+                {
+                    bbox = null
+                }
+
+                console.log('[AltarArea] house mesh:', m.name, 'visible:', !!m.visible, 'worldPos:', worldPos, 'attrs:', attrs, 'bbox:', bbox)
+
+                // Add visual marker at center for debug (small sphere)
+                const marker = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.15, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xff00ff })
+                )
+                marker.position.copy(worldPos)
+                marker.userData._debugMarkerFor = m.name
+                this.game.scene.add(marker)
+
+                // Force a simple material so it's visible even if original material expects missing attributes
+                try
+                {
+                    if(m.isMesh)
+                    {
+                        m.material = new THREE.MeshBasicMaterial({ color: 0xcccccc })
+                        m.material.needsUpdate = true
+                        m.visible = true
+                    }
+                }
+                catch(e)
+                {
+                    // ignore
+                }
+            }
+
+            // also add a marker at the POI position for clarity
+            try
+            {
+                const poiMarker = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+                )
+                poiMarker.position.copy(position)
+                poiMarker.userData._debugPoi = true
+                this.game.scene.add(poiMarker)
+                console.log('[AltarArea] Added POI marker (green) at', position)
+            }
+            catch(e)
+            {
+                // ignore
+            }
+
+            console.log('[AltarArea] Added debug markers for house meshes (magenta) and POI (green).')
+        }
+        catch(e)
+        {
+            console.warn('[AltarArea] debug house inspection failed:', e)
+        }
+    }
+
 }
