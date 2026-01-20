@@ -21,6 +21,28 @@ export class Audio
         {
             this.update()
         }, 14)
+
+        // Try to resume WebAudio context on first user gesture (fix autoplay policy warnings)
+        const _tryResumeAudio = () =>
+        {
+            try
+            {
+                if(typeof Howler !== 'undefined' && Howler.ctx && Howler.ctx.state === 'suspended')
+                {
+                    Howler.ctx.resume().catch(() => {})
+                }
+            }
+            catch(e)
+            {
+                // ignore
+            }
+
+            window.removeEventListener('pointerdown', _tryResumeAudio)
+            window.removeEventListener('touchstart', _tryResumeAudio)
+        }
+
+        window.addEventListener('pointerdown', _tryResumeAudio, { once: true, passive: true })
+        window.addEventListener('touchstart', _tryResumeAudio, { once: true, passive: true })
     }
 
     init()

@@ -76,18 +76,43 @@ export class CareerArea extends Area
             green: uniform(color('#a2ffab'))
         }
 
+        // Mapeo de respaldo: si las Custom Properties no se exportan desde Blender,
+        // podemos asignar texturas basándonos en el índice de la línea
+        // Texturas disponibles para el Club de IA (en orden)
+        const aiClubTextures = [
+            'careerAIClub',
+            'careerMachineLearning', 
+            'careerTechCommunity',
+            'careerReinforcementLearning',
+            'careerDataScience',
+            'careerComputerVision'
+        ]
+        const aiClubColors = ['blue', 'orange', 'purple', 'green', 'blue', 'orange']
+        
+        let lineIndex = 0
+
         for(const group of lineGroups)
         {
             const line = {}
             line.group = group
-            line.size = parseFloat(line.group.userData.size)
-            line.hasEnd = line.group.userData.hasEnd
-            line.color = line.group.userData.color
-            line.texture = this.game.resources[`${line.group.userData.texture}Texture`]
-
-            line.stone = line.group.children.find(child => child.name.startsWith('stone'))
-            line.stone.position.y = 0
             
+            // Debug: mostrar todo el userData para ver qué se está exportando
+            console.log(`[CareerArea] Línea: ${group.name}, userData completo:`, group.userData)
+            
+            // Intentar leer desde userData, si no existe usar valores por defecto
+            line.size = line.group.userData.size ? parseFloat(line.group.userData.size) : 5.0
+            line.hasEnd = line.group.userData.hasEnd !== undefined ? line.group.userData.hasEnd : true
+            line.color = line.group.userData.color || aiClubColors[lineIndex % aiClubColors.length]
+            
+            line.stone = line.group.children.find(child => child.name.startsWith('stone'))
+            
+            if(!line.stone)
+            {
+                console.warn(`[CareerArea] No se encontró "stone" hijo en línea: ${line.group.name}`)
+                continue
+            }
+            
+            line.stone.position.y = 0
             line.origin = line.group.position.clone()
             
             line.isIn = false
@@ -96,12 +121,43 @@ export class CareerArea extends Area
             line.offsetTarget = 0
             line.labelReveal = uniform(0)
 
+            // Obtener textura: userData.texture debe ser como "careerFreelancer" o "careerAIClub"
+            // El código busca: userData.texture + "Texture" = "careerFreelancerTexture"
+            let textureName = line.group.userData.texture
+            
+            // Si no hay userData.texture, usar mapeo de respaldo basado en el índice
+            if(!textureName || textureName === 'undefined' || textureName === undefined)
             {
-                line.textMesh = line.stone.children.find(child => child.name.startsWith('careerText'))
+                // Fallback: asignar texturas del Club de IA basándose en el índice
+                const fallbackTextureName = aiClubTextures[lineIndex % aiClubTextures.length]
+                textureName = fallbackTextureName
+                console.warn(`[CareerArea] userData.texture no está definido en línea: ${line.group.name}. Usando fallback: ${fallbackTextureName}`)
+            }
+            
+            const textureKey = `${textureName}Texture`
+            line.texture = this.game.resources[textureKey]
+            
+            if(!line.texture)
+            {
+                console.error(`[CareerArea] ⚠️ Textura no encontrada: "${textureKey}". userData.texture = "${textureName}". Línea: ${line.group.name}`)
+                console.error(`[CareerArea] Texturas disponibles en recursos que empiezan con "career":`, 
+                    Object.keys(this.game.resources).filter(key => key.startsWith('career')))
+            }
 
+            line.textMesh = line.stone.children.find(child => child.name.startsWith('careerText'))
+            
+            if(!line.textMesh)
+            {
+                console.warn(`[CareerArea] No se encontró "careerText" mesh en línea: ${line.group.name}. Hijos disponibles:`, 
+                    line.stone.children.map(c => c.name))
+            }
+            
+            // Solo crear material si tenemos textura y textMesh
+            if(line.texture && line.textMesh)
+            {
                 const material = new THREE.MeshLambertNodeMaterial({ transparent: true })
                 
-                const baseColor = colors[line.color]
+                const baseColor = colors[line.color] || colors.blue
 
                 material.outputNode = Fn(() =>
                 {
@@ -125,9 +181,16 @@ export class CareerArea extends Area
                 line.textMesh.castShadow = false
                 line.textMesh.receiveShadow = false
                 line.textMesh.material = material
+                
+                console.log(`[CareerArea] ✓ Configurada línea: ${line.group.name}, textura: ${textureKey}, color: ${line.color}`)
+            }
+            else
+            {
+                console.error(`[CareerArea] ⚠️ No se pudo configurar material para línea: ${line.group.name}. textura: ${!!line.texture}, textMesh: ${!!line.textMesh}`)
             }
 
             this.lines.items.push(line)
+            lineIndex++
         }
 
         this.lines.items.sort((a, b) => b.origin.z - a.origin.z)
@@ -155,7 +218,7 @@ export class CareerArea extends Area
         this.year.originZ = this.year.group.position.z
         this.year.size = 17
         this.year.offsetTarget = 0
-        this.year.start = 2008
+        this.year.start = 2025
         this.year.current = this.year.start
 
         //    Digit indexes
@@ -365,7 +428,8 @@ export class CareerArea extends Area
         const finalPositionZ = this.year.originZ - this.year.offsetTarget
         this.year.group.position.z += (finalPositionZ - this.year.group.position.z) * this.game.ticker.deltaScaled * 10
 
-        const yearCurrent = this.year.start + Math.floor(this.year.offsetTarget)
+        const yearProgress = Math.min(1, Math.max(0, this.year.offsetTarget / this.year.size))
+        const yearCurrent = this.year.start + Math.floor(yearProgress * 2)
 
         if(yearCurrent !== this.year.current)
         {

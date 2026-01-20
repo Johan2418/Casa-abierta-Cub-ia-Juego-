@@ -533,15 +533,33 @@ export class CircuitArea extends Area
         this.obstacles = {}
         this.obstacles.items = []
         
-        const baseObstacles = this.references.items.get('obstacles')
+        const baseObstacles = this.references.items.get('obstacles') || []
 
         let i = 0
         for(const baseObstacle of baseObstacles)
         {
+            if(!baseObstacle || !baseObstacle.userData || !baseObstacle.userData.object)
+                continue
+
             const obstacle = {}
             obstacle.object = baseObstacle.userData.object
             obstacle.osciliationOffset = - i * 1
-            obstacle.basePosition = obstacle.object.visual.object3D.position.clone()
+
+            // Try to use visual object3D if available, otherwise fallback to any available object3D or origin
+            let basePos = new THREE.Vector3()
+            try
+            {
+                if(obstacle.object.visual && obstacle.object.visual.object3D && obstacle.object.visual.object3D.position)
+                    basePos = obstacle.object.visual.object3D.position.clone()
+                else if(obstacle.object.object3D && obstacle.object.object3D.position)
+                    basePos = obstacle.object.object3D.position.clone()
+            }
+            catch(e)
+            {
+                basePos = new THREE.Vector3()
+            }
+
+            obstacle.basePosition = basePos
 
             this.obstacles.items.push(obstacle)
 
@@ -783,7 +801,8 @@ export class CircuitArea extends Area
 
     setBanners()
     {
-        this.banners = this.references.items.get('banners')
+        const b = this.references.items.get('banners') || []
+        this.banners = Array.isArray(b) ? b : [ b ]
     }
 
     setLeaderboard()

@@ -349,7 +349,7 @@ export class Objects
             if(_object.physical)
             {
                 // Felt in the floor => reset
-                if(position.y < this.game.water.depthElevation)
+                if(position.y < this.game.water.depthElevation && !_object.physical.preventReset)
                 {
                     this.resetObject(_object)
                 }

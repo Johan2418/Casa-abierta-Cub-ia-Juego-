@@ -64,8 +64,16 @@ export class BowlingArea extends Area
             distanceFade: 25,
             onPlaying: (item) =>
             {
+                if(!this.ball || !this.ball.position)
+                {
+                    // Ball not ready yet - keep sound silent and position at origin
+                    item.positions[0].set(0, 0, 0)
+                    item.volume = 0
+                    return
+                }
+
                 item.positions[0].copy(this.ball.position)
-                item.volume = remapClamp(this.ball.speed, 0, 5, 0, 0.6)
+                item.volume = remapClamp(this.ball.speed ?? 0, 0, 5, 0, 0.6)
             }
         })
     }
@@ -117,7 +125,7 @@ export class BowlingArea extends Area
                     linearDamping: 0.1,
                     angularDamping: 0.5,
                     sleeping: true,
-                    colliders: descriptions[1].colliders,
+                    colliders: (descriptions[1] && descriptions[1].colliders) ? descriptions[1].colliders : [],
                     waterGravityMultiplier: - 1,
                     mass: 0.02,
                     contactThreshold: 5,
@@ -526,8 +534,15 @@ export class BowlingArea extends Area
     update()
     {
         let showRestartInteractivePoint = false
-        
-        // Screen position
+
+        // Screen position (protegido)
+        if(!this.screen || typeof this.screen.min !== 'number' || typeof this.screen.max !== 'number') {
+            if(!this._warnedScreen) {
+                console.warn('[BowlingArea] this.screen o sus límites no están definidos. Revisa el modelo GLB y nodos.');
+                this._warnedScreen = true;
+            }
+            return;
+        }
         const targetX = clamp(this.game.player.position.x, this.screen.min, this.screen.max)
         this.screen.x += (targetX - this.screen.x) * this.game.ticker.deltaScaled * 2
 

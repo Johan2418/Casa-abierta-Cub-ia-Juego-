@@ -1,293 +1,181 @@
-import * as THREE from 'three/webgpu'
-import { color, float, Fn, instancedArray, mix, normalWorld, positionGeometry, step, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl'
-import { Inputs } from '../../Inputs/Inputs.js'
-import { InteractivePoints } from '../../InteractivePoints.js'
 import { Area } from './Area.js'
-import gsap from 'gsap'
-import { MeshDefaultMaterial } from '../../Materials/MeshDefaultMaterial.js'
+import * as THREE from 'three/webgpu'
 
-export class LandingArea extends Area
-{
-    constructor(model)
-    {
-        super(model)
 
-        this.localTime = uniform(0)
+// Minimal LandingArea used to debug whether `letters` references are being detected.
+export class LandingArea extends Area {
+  constructor(model) {
+  super(model)
+  this.setLetters()
+  }
 
-        this.setLetters()
-        this.setKiosk()
-        this.setControls()
-        this.setBonfire()
-        // this.setFWA()
-        this.setAchievement()
-    }
+  setLetters()
+  {
+      // 1) Recolectar letras desde references o por nombre en el modelo
+      let letters = []
 
-    setLetters()
-    {
-        const references = this.references.items.get('letters')
+      const refsLetters = this.references?.items?.get?.('letters')
+      if(Array.isArray(refsLetters) && refsLetters.length)
+      {
+          letters = refsLetters
+      }
+      else
+      {
+          // Fallback: buscar en el modelo por nombre
+          this.model.traverse((o) =>
+          {
+              if(!o) return
+              const n = (o.name || '').toLowerCase()
+              if(n === 'letters' || n.startsWith('letters.') || n.startsWith('letters_') || n.startsWith('letters-'))
+                  letters.push(o)
+          })
+      }
 
-        for(const reference of references)
-        {
-            const physical = reference.userData.object.physical
-            physical.colliders[0].setActiveEvents(this.game.RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
-            physical.colliders[0].setContactForceEventThreshold(5)
-            physical.onCollision = (force, position) =>
-            {
-                this.game.audio.groups.get('hitBrick').playRandomNext(force, position)
-            }
-        }
-    }
+      if(!letters.length)
+      {
+          console.warn('[LandingArea] No letters found (no "letters" ref and no letter-like objects in model)')
+          return
+      }
 
-    setKiosk()
-    {
-        // Interactive point
-        const interactivePoint = this.game.interactivePoints.create(
-            this.references.items.get('kioskInteractivePoint')[0].position,
-            'Map',
-            InteractivePoints.ALIGN_RIGHT,
-            InteractivePoints.STATE_CONCEALED,
-            () =>
-            {
-                this.game.inputs.interactiveButtons.clearItems()
-                this.game.modals.open('map')
-                // interactivePoint.hide()
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.addItems(['interact'])
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.removeItems(['interact'])
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.removeItems(['interact'])
-            }
-        )
+      // Helper: construir un collider cuboid desde el bounding box del objeto
+      const buildCuboidCollidersFromObject = (object3D) =>
+      {
+          // Necesitamos world matrices actualizadas para un Box3 correcto
+          object3D.updateWorldMatrix(true, true)
 
-        // this.game.map.items.get('map').events.on('close', () =>
-        // {
-        //     interactivePoint.show()
-        // })
-    }
+          const boxWorld = new THREE.Box3().setFromObject(object3D)
+          const sizeWorld = new THREE.Vector3()
+          const centerWorld = new THREE.Vector3()
+          boxWorld.getSize(sizeWorld)
+          boxWorld.getCenter(centerWorld)
 
-    setControls()
-    {
-        // Interactive point
-        const interactivePoint = this.game.interactivePoints.create(
-            this.references.items.get('controlsInteractivePoint')[0].position,
-            'Controls',
-            InteractivePoints.ALIGN_RIGHT,
-            InteractivePoints.STATE_CONCEALED,
-            () =>
-            {
-                this.game.inputs.interactiveButtons.clearItems()
-                this.game.menu.open('controls')
-                interactivePoint.hide()
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.addItems(['interact'])
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.removeItems(['interact'])
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.removeItems(['interact'])
-            }
-        )
+          // Convertir el centro del box al espacio local del objeto,
+          // porque los colliders se definen en espacio local del body.
+          const invWorld = new THREE.Matrix4().copy(object3D.matrixWorld).invert()
+          const centerLocal = centerWorld.clone().applyMatrix4(invWorld)
 
-        // Menu instance
-        const menuInstance = this.game.menu.items.get('controls')
+          // Evitar colliders degenerados
+          const minSize = 0.01
+          sizeWorld.x = Math.max(sizeWorld.x, minSize)
+          sizeWorld.y = Math.max(sizeWorld.y, minSize)
+          sizeWorld.z = Math.max(sizeWorld.z, minSize)
 
-        menuInstance.events.on('close', () =>
-        {
-            interactivePoint.show()
-        })
+          return [
+              {
+                  shape: 'cuboid',
+                  // half extents
+                  parameters: [ sizeWorld.x * 0.5, sizeWorld.y * 0.5, sizeWorld.z * 0.5 ],
+                  position: centerLocal,
+                  quaternion: new THREE.Quaternion(), // sin rotación extra
+                  friction: 0.7
+              }
+          ]
+      }
 
-        menuInstance.events.on('open', () =>
-        {
-            if(this.game.inputs.mode === Inputs.MODE_GAMEPAD)
-                menuInstance.tabs.goTo('gamepad')
-            else if(this.game.inputs.mode === Inputs.MODE_MOUSEKEYBOARD)
-                menuInstance.tabs.goTo('mouse-keyboard')
-            else if(this.game.inputs.mode === Inputs.MODE_TOUCH)
-                menuInstance.tabs.goTo('touch')
-        })
-    }
+      // 2) Asegurar física y configurar colisiones/sonido
+      for(const letter of letters)
+      {
+          if(!letter) continue
 
-    setBonfire()
-    {
-        const position = this.references.items.get('bonfireHashes')[0].position
+          // Caso A: ya existe objeto físico (el loader ya lo creó)
+          const existingPhysical = letter.userData?.object?.physical
+          if(existingPhysical && existingPhysical.colliders && existingPhysical.colliders[0])
+          {
+              const body = existingPhysical.body
+              
+              // Configurar eventos de colisión (igual que bricks)
+              existingPhysical.colliders[0].setActiveEvents(this.game.RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+              existingPhysical.colliders[0].setContactForceEventThreshold(15)
+              existingPhysical.onCollision = (force, position) =>
+              {
+                  this.game.audio.groups.get('hitBrick')?.playRandomNext(force, position)
+              }
+              
+              // Ajustar propiedades físicas para que coincidan con bricks
+              if(existingPhysical.type === 'dynamic' && body)
+              {
+                  // Verificar si tiene masa razonable (si es muy baja o muy alta, ajustarla)
+                  const currentMass = body.mass()
+                  if(currentMass < 0.05 || currentMass > 1.0)
+                  {
+                      // Ajustar masa en todos los colliders
+                      for(const collider of existingPhysical.colliders)
+                      {
+                          collider.setMass(0.1 / existingPhysical.colliders.length)
+                      }
+                  }
+                  
+                  // Ajustar propiedades físicas para igualar bricks
+                  for(const collider of existingPhysical.colliders)
+                  {
+                      collider.setFriction(0.7)
+                      collider.setRestitution(0.15) // default como bricks
+                  }
+                  
+                  // Ajustar damping a defaults (0.1 cada uno, como bricks)
+                  body.setLinearDamping(0.1)
+                  body.setAngularDamping(0.1)
+                  
+                  // Asegurar que está durmiendo (como bricks)
+                  if(!body.isSleeping())
+                  {
+                      body.sleep()
+                  }
+                  
+                  // Asegurar que puede dormirse después
+                  if(typeof body.setCanSleep === 'function')
+                  {
+                      body.setCanSleep(true)
+                  }
+                  
+                  // Agregar waterGravityMultiplier (igual que bricks)
+                  existingPhysical.waterGravityMultiplier = -1
+                  
+                  // Prevenir reset automático para que las letras puedan moverse libremente
+                  existingPhysical.preventReset = true
+              }
+              
+              continue
+          }
 
-        // Particles
-        let particles = null
-        {
-            const emissiveMaterial = this.game.materials.getFromName('emissiveOrangeRadialGradient')
-    
-            const count = 30
-            const elevation = uniform(5)
-            const positions = new Float32Array(count * 3)
-            const scales = new Float32Array(count)
-    
-    
-            for(let i = 0; i < count; i++)
-            {
-                const i3 = i * 3
-    
-                const angle = Math.PI * 2 * Math.random()
-                const radius = Math.pow(Math.random(), 1.5) * 1
-                positions[i3 + 0] = Math.cos(angle) * radius
-                positions[i3 + 1] = Math.random()
-                positions[i3 + 2] = Math.sin(angle) * radius
-    
-                scales[i] = 0.02 + Math.random() * 0.06
-            }
-            
-            const positionAttribute = instancedArray(positions, 'vec3').toAttribute()
-            const scaleAttribute = instancedArray(scales, 'float').toAttribute()
-    
-            const material = new THREE.SpriteNodeMaterial()
-            material.outputNode = emissiveMaterial.outputNode
-    
-            const progress = float(0).toVar()
-    
-            material.positionNode = Fn(() =>
-            {
-                const newPosition = positionAttribute.toVar()
-                progress.assign(newPosition.y.add(this.localTime.mul(newPosition.y)).fract())
-    
-                newPosition.y.assign(progress.mul(elevation))
-                newPosition.xz.addAssign(this.game.wind.direction.mul(progress))
-    
-                const progressHide = step(0.8, progress).mul(100)
-                newPosition.y.addAssign(progressHide)
-                
-                return newPosition
-            })()
-            material.scaleNode = Fn(() =>
-            {
-                const progressScale = progress.remapClamp(0.5, 1, 1, 0)
-                return scaleAttribute.mul(progressScale)
-            })()
-    
-            const geometry = new THREE.CircleGeometry(0.5, 8)
-    
-            particles = new THREE.Mesh(geometry, material)
-            particles.visible = false
-            particles.position.copy(position)
-            particles.count = count
-            this.game.scene.add(particles)
-        }
+          // Caso B: no tiene física -> crearla con un cuboid collider
+          // Guardar parent actual para reinsertar el modelo (si estaba en escena)
+          const parent = letter.parent || this.game.scene
 
-        // Hashes
-        {
-            const alphaNode = Fn(() =>
-            {
-                const baseUv = uv(1)
-                const distanceToCenter = baseUv.sub(0.5).length()
-    
-                const voronoi = texture(
-                    this.game.noises.voronoi,
-                    baseUv
-                ).g
-    
-                voronoi.subAssign(distanceToCenter.remap(0, 0.5, 0.3, 0))
-    
-                return voronoi
-            })()
-    
-            const material = new MeshDefaultMaterial({
-                colorNode: color(0x6F6A87),
-                alphaNode: alphaNode,
-                hasWater: false,
-                hasLightBounce: false
-            })
-    
-            const mesh = this.references.items.get('bonfireHashes')[0]
-            mesh.material = material
-        }
+          // Si ya estaba en escena, lo removemos para que Objects.add lo maneje
+          // (evita duplicados)
+          letter.removeFromParent?.()
 
-        // Burn
-        const burn = this.references.items.get('bonfireBurn')[0]
-        burn.visible = false
+          const colliders = buildCuboidCollidersFromObject(letter)
 
-        // Interactive point
-        this.game.interactivePoints.create(
-            this.references.items.get('bonfireInteractivePoint')[0].position,
-            'Res(e)t',
-            InteractivePoints.ALIGN_RIGHT,
-            InteractivePoints.STATE_CONCEALED,
-            () =>
-            {
-                this.game.reset()
+          const object = this.game.objects.add(
+              {
+                  model: letter,
+                  updateMaterials: false,
+                  parent: parent,
+              },
+              {
+                  type: 'dynamic',
+                  position: letter.position.clone(),
+                  rotation: letter.quaternion.clone(),
+                  friction: 0.7,
+                  mass: 0.1,
+                  sleeping: true,
+                  colliders: colliders,
+                  waterGravityMultiplier: -1,
+                  contactThreshold: 15,
+                  preventReset: true,
+                  onCollision: (force, position) =>
+                  {
+                      this.game.audio.groups.get('hitBrick')?.playRandomNext(force, position)
+                  }
+              }
+          )
 
-                gsap.delayedCall(2, () =>
-                {
-                    // Bonfire
-                    particles.visible = true
-                    burn.visible = true
-                    this.game.ticker.wait(2, () =>
-                    {
-                        particles.geometry.boundingSphere.center.y = 2
-                        particles.geometry.boundingSphere.radius = 2
-                    })
+          // Por si quieres debug rápido:
+          // console.log('[LandingArea] Added physics to letter:', letter.name, object)
+      }
+  }
 
-                    // Sound
-                    this.game.audio.groups.get('campfire').items[0].positions.push(position)
-                })
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.addItems(['interact'])
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.removeItems(['interact'])
-            },
-            () =>
-            {
-                this.game.inputs.interactiveButtons.removeItems(['interact'])
-            }
-        )
-    }
 
-    setFWA()
-    {
-        let i = 0
-        const positions = [
-            new THREE.Vector3(42.361, 0, 41.1709136),
-            new THREE.Vector3(45.487606048583984, 0, 37.69718551635742),
-        ]
-        const pop = () =>
-        {
-            i++
-            const position = positions[i % positions.length]
-            this.game.world.confetti.pop(position)
-            
-            setTimeout(pop, 500 + Math.random() * 1500)
-        }
-        setTimeout(pop, 2000)
-        
-    }
-
-    setAchievement()
-    {
-        this.events.on('boundingIn', () =>
-        {
-            this.game.achievements.setProgress('areas', 'landing')
-        })
-        this.events.on('boundingOut', () =>
-        {
-            this.game.achievements.setProgress('landingLeave', 1)
-        })
-    }
-
-    update()
-    {
-        this.localTime.value += this.game.ticker.deltaScaled * 0.1
-    }
 }

@@ -232,6 +232,10 @@ export class Physics
             sleeping: physical.body.isSleeping() 
         }
 
+        // Copy custom properties
+        if(typeof _physicalDescription.preventReset !== 'undefined')
+            physical.preventReset = _physicalDescription.preventReset
+
         this.physicals.push(physical)
 
         return physical
