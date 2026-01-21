@@ -23,26 +23,88 @@ export class SocialArea extends Area
         }
 
         // Temporalmente deshabilitado: se implementará en una sola estatua más adelante
-        // this.setLinks()
         this.setFans()
-        this.setOnlyFans()
+        // Deshabilitado: botón OnlyFans removido del caballerito
+        // this.setOnlyFans()
         this.setStatue()
         this.setNewStatues()
+        // setLinks debe llamarse después de setNewStatues para que las estatuas estén cargadas
+        this.setLinks()
         this.setAchievement()
     }
 
     setLinks()
     {
-        const radius = 6
-        let i = 0
-
         for(const link of socialData)
         {
-            const angle = i * Math.PI / (socialData.length - 1)
-            const position = this.center.clone()
-            position.x += Math.cos(angle) * radius
-            position.y = 1
-            position.z -= Math.sin(angle) * radius
+            let position = null
+
+            // Si es Instagram, buscar la estatua de Instagram y usar su posición
+            if(link.name.toLowerCase().includes('instagram'))
+            {
+                // Buscar la estatua de Instagram en los objetos cargados
+                for(const object of this.objects.items)
+                {
+                    if(object.visual && object.visual.object3D)
+                    {
+                        const objectName = object.visual.object3D.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+                        if(objectName.includes('instagram'))
+                        {
+                            // Usar la posición de la estatua de Instagram
+                            position = new THREE.Vector3()
+                            object.visual.object3D.getWorldPosition(position)
+                            position.y += 2 // Elevar un poco el botón sobre la estatua
+                            break
+                        }
+                    }
+                }
+
+                // Si no se encontró la estatua, usar posición por defecto
+                if(!position)
+                {
+                    position = this.center.clone()
+                    position.y = 1
+                    console.warn('[SocialArea] No se encontró la estatua de Instagram, usando posición por defecto')
+                }
+            }
+            // Si es WhatsApp, buscar la estatua de WhatsApp y usar su posición
+            else if(link.name.toLowerCase().includes('whatsapp'))
+            {
+                // Buscar la estatua de WhatsApp en los objetos cargados
+                for(const object of this.objects.items)
+                {
+                    if(object.visual && object.visual.object3D)
+                    {
+                        const objectName = object.visual.object3D.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+                        if(objectName.includes('whatsapp'))
+                        {
+                            // Usar la posición de la estatua de WhatsApp
+                            position = new THREE.Vector3()
+                            object.visual.object3D.getWorldPosition(position)
+                            position.y += 2 // Elevar un poco el botón sobre la estatua
+                            break
+                        }
+                    }
+                }
+
+                // Si no se encontró la estatua, usar posición por defecto
+                if(!position)
+                {
+                    position = this.center.clone()
+                    position.y = 1
+                    console.warn('[SocialArea] No se encontró la estatua de WhatsApp, usando posición por defecto')
+                }
+            }
+            else
+            {
+                // Para otras redes sociales, usar el método original (posicionamiento circular)
+                const radius = 6
+                const angle = 0 * Math.PI / Math.max(socialData.length - 1, 1)
+                position = this.center.clone()
+                position.x += Math.cos(angle) * radius
+                position.y = 1
+                position.z -= Math.sin(angle) * radius
+            }
 
             this.interactivePoint = this.game.interactivePoints.create(
                 position,
@@ -53,7 +115,7 @@ export class SocialArea extends Area
                 {
                     if(link.url)
                         window.open(link.url, '_blank')
-                    else(link.modal)
+                    else if(link.modal)
                         this.game.modals.open(link.modal)
                 },
                 () =>
@@ -69,8 +131,6 @@ export class SocialArea extends Area
                     this.game.inputs.interactiveButtons.removeItems(['interact'])
                 }
             )
-            
-            i++
         }
     }
 
@@ -236,7 +296,7 @@ export class SocialArea extends Area
             'master_chief',
             'masterchief',
             'whatsapp',
-            'goku',
+            'veggeto',
             'caballerito',
             'boyphysicaldynamic',
             'baguiraphysicaldynamic',
@@ -279,17 +339,72 @@ export class SocialArea extends Area
             ]
         }
 
+        // ===== DIAGNÓSTICO: Listar todos los objetos en el modelo =====
+        console.log('[SocialArea] ===== DIAGNÓSTICO: Explorando modelo =====')
+        const allObjectsInModel = []
+        this.model.traverse((child) =>
+        {
+            if(!child || child === this.model)
+                return
+
+            allObjectsInModel.push({
+                name: child.name,
+                type: child.constructor.name,
+                isMesh: child.isMesh,
+                hasChildren: child.children.length > 0,
+                preventAutoAdd: child.userData?.preventAutoAdd,
+                visible: child.visible,
+                level: child.parent === this.model ? 'direct' : 'nested'
+            })
+        })
+
+        console.log(`[SocialArea] Total de objetos encontrados en modelo: ${allObjectsInModel.length}`)
+        allObjectsInModel.forEach(obj => {
+            console.log(`[SocialArea]   - "${obj.name}" (${obj.type}, level: ${obj.level}, preventAutoAdd: ${obj.preventAutoAdd}, isMesh: ${obj.isMesh}, hasChildren: ${obj.hasChildren})`)
+        })
+
+        // Buscar específicamente Veggeto y variantes
+        const veggetoCandidates = allObjectsInModel.filter(obj => 
+            obj.name.toLowerCase().includes('veggeto') || 
+            obj.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('veggeto')
+        )
+        
+        if(veggetoCandidates.length > 0)
+        {
+            console.log(`[SocialArea] ⚠️ VEGGETO ENCONTRADO: ${veggetoCandidates.length} objeto(s) que contienen "veggeto":`)
+            veggetoCandidates.forEach(candidate => {
+                console.log(`[SocialArea]   - Nombre exacto: "${candidate.name}"`)
+                console.log(`[SocialArea]   - preventAutoAdd: ${candidate.preventAutoAdd}`)
+                console.log(`[SocialArea]   - Nivel: ${candidate.level}`)
+                console.log(`[SocialArea]   - Tipo: ${candidate.type}`)
+            })
+        }
+        else
+        {
+            console.warn('[SocialArea] ⚠️ VEGGETO NO ENCONTRADO: No se encontró ningún objeto con "veggeto" en el nombre')
+        }
+        console.log('[SocialArea] ===== FIN DIAGNÓSTICO =====\n')
+
         // Primero, buscar objetos que no se cargaron automáticamente en el modelo
+        // Incluyendo búsqueda específica mejorada para Veggeto
         const foundInModel = []
+        const veggetoObjects = [] // Almacenar objetos de Veggeto específicamente
+        
         this.model.traverse((child) =>
         {
             if(!child || child === this.model)
                 return
 
             const childName = child.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+            const originalName = child.name
             
-            // Verificar si es una de las nuevas estatuas
-            const isNewStatue = newStatueNames.some(name => 
+            // Búsqueda mejorada para Veggeto: buscar variantes del nombre
+            const isVeggeto = originalName.toLowerCase().includes('veggeto') || 
+                          childName.includes('veggeto') ||
+                          childName === 'veggeto'
+            
+            // Verificar si es una de las nuevas estatuas (incluyendo Veggeto)
+            const isNewStatue = isVeggeto || newStatueNames.some(name => 
                 childName === name || 
                 childName.includes(name) ||
                 name.includes(childName)
@@ -306,20 +421,97 @@ export class SocialArea extends Area
                 if(!alreadyLoaded)
                 {
                     foundInModel.push(child)
+                    
+                    // Registrar específicamente si es Veggeto
+                    if(isVeggeto)
+                    {
+                        veggetoObjects.push({
+                            object3D: child,
+                            name: originalName,
+                            preventAutoAdd: child.userData?.preventAutoAdd,
+                            isMesh: child.isMesh,
+                            hasChildren: child.children.length > 0
+                        })
+                        console.log(`[SocialArea] 🔍 Veggeto detectado en modelo: "${originalName}" (preventAutoAdd: ${child.userData?.preventAutoAdd})`)
+                    }
                 }
             }
         })
 
         // Cargar objetos que no se cargaron automáticamente
+        // Priorizar Veggeto específicamente
         for(const child of foundInModel)
         {
-            console.log(`[SocialArea] Cargando estatua desde modelo: ${child.name}`)
+            const isVeggeto = child.name.toLowerCase().includes('veggeto')
+            const logPrefix = isVeggeto ? '[SocialArea] ⚡ VEGGETO:' : '[SocialArea]'
             
+            console.log(`${logPrefix} Cargando estatua desde modelo: ${child.name}`)
+            console.log(`${logPrefix}   - preventAutoAdd: ${child.userData?.preventAutoAdd}`)
+            console.log(`${logPrefix}   - Tipo: ${child.constructor.name}`)
+            console.log(`${logPrefix}   - isMesh: ${child.isMesh}`)
+            console.log(`${logPrefix}   - Tiene hijos: ${child.children.length > 0}`)
+            
+            // Verificar geometría antes de cargar (especialmente para Veggeto)
+            let hasGeometry = false
+            const geometryInfo = []
+            child.traverse((descendant) =>
+            {
+                if(descendant.isMesh && descendant.geometry)
+                {
+                    hasGeometry = true
+                    geometryInfo.push({
+                        name: descendant.name,
+                        vertices: descendant.geometry.attributes.position?.count || 0,
+                        indices: descendant.geometry.index?.count || 0
+                    })
+                }
+            })
+
+            if(!hasGeometry)
+            {
+                console.warn(`${logPrefix} ⚠️ Objeto "${child.name}" no tiene geometría válida. Saltando...`)
+                if(isVeggeto)
+                {
+                    console.error(`${logPrefix} ❌ ERROR CRÍTICO: Veggeto no tiene geometría válida!`)
+                }
+                continue
+            }
+
+            console.log(`${logPrefix} ✓ Geometría válida encontrada: ${geometryInfo.length} mesh(es)`)
+            geometryInfo.forEach(geom => {
+                console.log(`${logPrefix}   - Mesh: "${geom.name}" (${geom.vertices} vértices, ${geom.indices} índices)`)
+            })
+
+            // Verificar materiales
+            let hasMaterials = false
+            child.traverse((descendant) =>
+            {
+                if(descendant.isMesh && descendant.material)
+                {
+                    hasMaterials = true
+                }
+            })
+
+            if(!hasMaterials)
+            {
+                console.warn(`${logPrefix} ⚠️ Objeto "${child.name}" no tiene materiales. Se asignarán materiales por defecto.`)
+            }
+
+            // Forzar carga incluso si tiene preventAutoAdd (especialmente para Veggeto)
+            const originalPreventAutoAdd = child.userData?.preventAutoAdd
+            if(originalPreventAutoAdd)
+            {
+                console.log(`${logPrefix} ⚠️ Objeto tiene preventAutoAdd=true. Temporalmente deshabilitando para forzar carga...`)
+                child.userData.preventAutoAdd = false
+            }
+
             try
             {
                 const object = this.game.objects.addFromModel(
                     child,
-                    {},
+                    {
+                        updateMaterials: true // Asegurar que los materiales se actualicen
+                    },
                     {
                         position: child.position.clone().add(this.model.position),
                         rotation: child.quaternion.clone(),
@@ -330,12 +522,63 @@ export class SocialArea extends Area
                 if(object)
                 {
                     this.objects.items.push(object)
-                    console.log(`[SocialArea] ✓ Estatua cargada: ${child.name}`)
+                    if(object.visual && object.visual.object3D)
+                    {
+                        console.log(`${logPrefix} ✓ Estatua cargada exitosamente: ${child.name}`)
+                        if(isVeggeto)
+                        {
+                            console.log(`${logPrefix} 🎉 VEGGETO CARGADO EXITOSAMENTE!`)
+                        }
+                    }
+                    else
+                    {
+                        console.error(`${logPrefix} ❌ Error: Objeto creado pero sin visual válido: ${child.name}`)
+                    }
+                }
+                else
+                {
+                    console.error(`${logPrefix} ❌ Error: addFromModel retornó null para: ${child.name}`)
+                    if(isVeggeto)
+                    {
+                        console.error(`${logPrefix} ❌ ERROR CRÍTICO: Veggeto no se pudo cargar!`)
+                    }
                 }
             }
             catch(error)
             {
-                console.error(`[SocialArea] ⚠️ Error al cargar estatua ${child.name}:`, error)
+                console.error(`${logPrefix} ❌ Error al cargar estatua ${child.name}:`, error)
+                if(isVeggeto)
+                {
+                    console.error(`${logPrefix} ❌ ERROR CRÍTICO AL CARGAR VEGGETO:`, error)
+                    console.error(`${logPrefix} Stack trace:`, error.stack)
+                }
+            }
+            finally
+            {
+                // Restaurar preventAutoAdd original
+                if(originalPreventAutoAdd)
+                {
+                    child.userData.preventAutoAdd = originalPreventAutoAdd
+                }
+            }
+        }
+
+        // Log específico de Veggeto después del intento de carga
+        if(veggetoObjects.length > 0)
+        {
+            console.log(`[SocialArea] ⚡ RESUMEN VEGGETO: ${veggetoObjects.length} objeto(s) encontrado(s)`)
+            const loadedVeggeto = this.objects.items.filter(obj => 
+                obj.visual && 
+                veggetoObjects.some(veggetoObj => 
+                    obj.visual.object3D === veggetoObj.object3D || 
+                    obj.visual.object3D.name === veggetoObj.name ||
+                    obj.visual.object3D.name.toLowerCase().includes('veggeto')
+                )
+            )
+            console.log(`[SocialArea] ⚡ Veggeto cargado exitosamente: ${loadedVeggeto.length}/${veggetoObjects.length}`)
+            if(loadedVeggeto.length === 0)
+            {
+                console.error('[SocialArea] ❌ ERROR: Ningún objeto de Veggeto se cargó exitosamente!')
             }
         }
 
@@ -358,7 +601,11 @@ export class SocialArea extends Area
             if(!isNewStatue)
                 continue
 
-            console.log(`[SocialArea] Procesando estatua: ${objectName}`)
+            // Verificación específica para caballerito
+            const isCaballerito = objectNameLower.includes('caballerito') || objectNameLower === 'caballerito'
+            const logPrefix = isCaballerito ? '[SocialArea] 🐴 CABALLERITO:' : '[SocialArea]'
+
+            console.log(`${logPrefix} Procesando estatua: ${objectName}`)
 
             // Si ya tiene física, verificar que sea dinámica
             if(object.physical && object.physical.body)
@@ -382,12 +629,28 @@ export class SocialArea extends Area
                         }
                     }
                     
+                    // Verificación específica para caballerito
+                    if(isCaballerito)
+                    {
+                        console.log(`${logPrefix} ✓ Caballerito ya tiene física dinámica`)
+                        console.log(`${logPrefix}   - Body habilitado: ${object.physical.body.isEnabled()}`)
+                        console.log(`${logPrefix}   - Colliders: ${object.physical.colliders?.length || 0}`)
+                        // Asegurar que el body esté habilitado
+                        object.physical.body.setEnabled(true)
+                        // Asegurar que no esté durmiendo para que responda a colisiones
+                        object.physical.body.wakeUp()
+                    }
+                    
                     continue
                 }
                 else
                 {
                     // Tiene física pero no es dinámica, remover y recrear
-                    console.log(`[SocialArea] Estatua ${objectName} tiene física pero no es dinámica. Recreando...`)
+                    console.log(`${logPrefix} Estatua ${objectName} tiene física pero no es dinámica. Recreando...`)
+                    if(isCaballerito)
+                    {
+                        console.log(`${logPrefix} ⚠️ IMPORTANTE: Caballerito tiene física ${object.physical.type}, convirtiendo a dynamic...`)
+                    }
                     this.game.physics.world.removeRigidBody(object.physical.body)
                     object.physical = null
                 }
@@ -408,7 +671,7 @@ export class SocialArea extends Area
 
             if(!hasGeometry)
             {
-                console.warn(`[SocialArea] ⚠️ Estatua ${objectName} no tiene geometría válida`)
+                console.warn(`${logPrefix} ⚠️ Estatua ${objectName} no tiene geometría válida`)
                 continue
             }
 
@@ -420,21 +683,32 @@ export class SocialArea extends Area
                 object3D.updateWorldMatrix(true, false)
                 const worldPosition = new THREE.Vector3()
                 const worldQuaternion = new THREE.Quaternion()
-                object3D.matrixWorld.decompose(worldPosition, worldQuaternion, new THREE.Vector3())
+                object3D.getWorldPosition(worldPosition)
+                object3D.getWorldQuaternion(worldQuaternion)
 
+                // Para el caballerito, usar una masa mayor para que no sea traspasado fácilmente
+                const mass = isCaballerito ? 1.0 : 0.1
+                
                 const physicalDescription = {
                     type: 'dynamic',
                     position: worldPosition,
                     rotation: worldQuaternion,
                     friction: 0.7,
-                    mass: 0.1,
-                    sleeping: true,
-                    canSleep: true, // Configurar canSleep en la descripción (antes de crear el body)
+                    mass: mass,
+                    sleeping: true, // Cambiar a true para que las estatuas puedan dormir y no caigan infinitamente
+                    canSleep: true,
                     colliders: colliders,
                     category: 'object',
                     waterGravityMultiplier: -1,
                     linearDamping: 0.1,
                     angularDamping: 0.1
+                }
+
+                if(isCaballerito)
+                {
+                    console.log(`${logPrefix} Creando física dinámica para caballerito...`)
+                    console.log(`${logPrefix}   - Masa: ${mass}`)
+                    console.log(`${logPrefix}   - Colliders: ${colliders.length}`)
                 }
 
                 object.physical = this.game.physics.getPhysical(physicalDescription)
@@ -448,16 +722,31 @@ export class SocialArea extends Area
                     // Nota: canSleep se configura en la descripción, no se puede cambiar después
                     object.physical.body.setEnabled(true)
                     
-                    console.log(`[SocialArea] ✓ Física dinámica aplicada a estatua: ${objectName}`)
+                    // Para el caballerito, asegurar que esté despierto y listo para colisiones
+                    if(isCaballerito)
+                    {
+                        object.physical.body.wakeUp()
+                        console.log(`${logPrefix} ✓ Física dinámica aplicada a caballerito`)
+                        console.log(`${logPrefix}   - Body habilitado: ${object.physical.body.isEnabled()}`)
+                        console.log(`${logPrefix}   - Durmiendo: ${object.physical.body.isSleeping()}`)
+                    }
+                    else
+                    {
+                        console.log(`[SocialArea] ✓ Física dinámica aplicada a estatua: ${objectName}`)
+                    }
                 }
                 else
                 {
-                    console.warn(`[SocialArea] ⚠️ No se pudo crear física para estatua: ${objectName}`)
+                    console.warn(`${logPrefix} ⚠️ No se pudo crear física para estatua: ${objectName}`)
+                    if(isCaballerito)
+                    {
+                        console.error(`${logPrefix} ❌ ERROR CRÍTICO: No se pudo crear física para caballerito!`)
+                    }
                 }
             }
             else
             {
-                console.warn(`[SocialArea] ⚠️ No se pudieron crear colliders para estatua: ${objectName}`)
+                console.warn(`${logPrefix} ⚠️ No se pudieron crear colliders para estatua: ${objectName}`)
             }
         }
 
