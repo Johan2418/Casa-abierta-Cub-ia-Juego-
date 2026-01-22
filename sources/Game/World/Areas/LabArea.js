@@ -23,6 +23,9 @@ export class LabArea extends Area
     {
         super(model)
 
+        // Adaptar referencias del nuevo modelo con prefijo "ref"
+        this.adaptReferences()
+
         // Debug
         if(this.game.debug.active)
         {
@@ -34,8 +37,12 @@ export class LabArea extends Area
         
         this.state = LabArea.STATE_CLOSED
 
+        // setScroller debe llamarse antes de setSounds porque setSounds usa this.scroller
+        this.setScroller()
         this.setSounds()
-        this.setInteractivePoint()
+        // Temporarily disable the Lab interactive point (removed on request)
+        // this.setInteractivePoint()
+        console.info('[LabArea] interactive point for Lab is temporarily disabled')
         this.setInputs()
         this.setCinematic()
         this.setShadeMix()
@@ -46,12 +53,12 @@ export class LabArea extends Area
         this.setAdjacents()
         this.setTitle()
         this.setUrl()
-        this.setScroller()
         this.setPendulum()
         this.setBlackBoard()
         this.setCandleFlames()
         this.setCauldron()
         this.setAchievement()
+        this.setSupabaseLogo()
 
         this.changeProject(0, null, true)
         this.scroller.progress = this.scroller.targetProgress
@@ -63,6 +70,85 @@ export class LabArea extends Area
         {
             this.debugPanel.addButton({ title: 'open', label: 'open' }).on('click', () => { this.open() })
             this.debugPanel.addButton({ title: 'close', label: 'close' }).on('click', () => { this.close() })
+        }
+    }
+
+    adaptReferences()
+    {
+        // Mapeo de referencias antiguas a nuevas con prefijo "ref"
+        const referenceMappings = {
+            'interactivePoint': 'refInteractivePoint',
+            'arrowPrevious': 'refArrowPrevious',
+            'arrowNext': 'refArrowNext',
+            'intersectPrevious': 'refIntersectPrevio', // Nota: termina con 'o', no 's'
+            'intersectNext': 'refIntersectNext',
+            'title': 'refTitle.001',
+            'url': 'refUrl.002',
+            'mecanism': 'refMecanism',
+            'mini': 'refMini',
+            'images': 'images', // Mantener igual si existe, sino buscar alternativas
+            'intersectUrl': 'intersectUrl', // Mantener igual si existe
+            'chainLeft': 'chainLeft', // Mantener igual si existe
+            'chainRight': 'chainRight', // Mantener igual si existe
+            'chainPulley': 'chainPulleyArrayR', // Mapear a chainPulleyArrayR
+            'gearA': 'gearA', // Mantener igual si existe
+            'gearB': 'gearB', // Mantener igual si existe
+            'gearC': 'gearC', // Mantener igual si existe
+            'balls': 'balls', // Mantener igual si existe
+            'blackBoard': 'blackBoardPhysica', // Mapear a blackBoardPhysica
+            'blackboardLabelsGamepadPlaystation': 'blackboardLabelsGamepadPlaystation', // Mantener igual
+            'blackboardLabelsGamepadXbox': 'blackboardLabelsGamepadXbox', // Mantener igual
+            'blackboardLabelsMouseKeyboard': 'blackboardLabelsMouseKeyboard', // Mantener igual
+            'candleFlame': 'candleFlame', // Mantener igual si existe
+            'heat': 'heat', // Mantener igual si existe
+            'wood': 'wood', // Mantener igual si existe
+            'liquid': 'liquid', // Mantener igual si existe
+        }
+
+        // Aplicar mapeos
+        for(const [oldName, newName] of Object.entries(referenceMappings))
+        {
+            // Si la referencia antigua no existe, intentar usar la nueva
+            if(!this.references.items.get(oldName) || !this.references.items.get(oldName)[0])
+            {
+                let newRef = this.references.items.get(newName)
+                
+                // Si no se encuentra por nombre exacto, buscar en el modelo
+                if(!newRef || !newRef[0])
+                {
+                    this.model.traverse((child) =>
+                    {
+                        const childName = child.name.toLowerCase()
+                        const searchName = newName.toLowerCase()
+                        
+                        // Buscar coincidencias flexibles
+                        if(childName === searchName || 
+                           childName.includes(searchName) || 
+                           searchName.includes(childName) ||
+                           childName.replace(/[^a-z0-9]/g, '') === searchName.replace(/[^a-z0-9]/g, ''))
+                        {
+                            if(!newRef || !newRef[0])
+                            {
+                                newRef = [child]
+                            }
+                        }
+                    })
+                }
+                
+                // Si encontramos la nueva referencia, mapearla al nombre antiguo
+                if(newRef && newRef[0])
+                {
+                    if(!this.references.items.has(oldName))
+                    {
+                        this.references.items.set(oldName, newRef)
+                        console.log(`[LabArea] Mapeada referencia: "${oldName}" → "${newName}"`)
+                    }
+                }
+                else
+                {
+                    console.warn(`[LabArea] No se encontró referencia: "${oldName}" ni "${newName}"`)
+                }
+            }
         }
     }
 
@@ -264,6 +350,12 @@ export class LabArea extends Area
 
         this.texts.createMaterialOnMesh = (mesh, textTexture) =>
         {
+            if(!mesh)
+            {
+                console.error('[LabArea] createMaterialOnMesh recibió mesh null/undefined')
+                return
+            }
+
             const material = new MeshDefaultMaterial({
                 hasWater: false,
                 alphaNode: texture(textTexture).r,
@@ -597,8 +689,52 @@ export class LabArea extends Area
         this.title = {}
         this.title.status = 'hidden'
         this.title.group = this.references.items.get('title')[0]
+        
+        if(!this.title.group)
+        {
+            console.error('[LabArea] No se encontró el grupo de title')
+            // Definir update como función dummy para evitar errores
+            this.title.update = () => {}
+            return
+        }
+        
         this.title.inner = this.title.group.children[0]
+        
+        if(!this.title.inner)
+        {
+            console.error('[LabArea] No se encontró inner en title.group')
+            // Definir update como función dummy para evitar errores
+            this.title.update = () => {}
+            return
+        }
+        
         this.title.textMesh = this.title.inner.children.find(_child => _child.name.startsWith('text'))
+        
+        if(!this.title.textMesh)
+        {
+            console.warn('[LabArea] No se encontró textMesh en title.inner.children. Buscando alternativamente...')
+            // Buscar cualquier mesh que pueda ser el texto
+            this.title.inner.traverse((child) =>
+            {
+                if(child.isMesh && (child.name.toLowerCase().includes('text') || !this.title.textMesh))
+                {
+                    if(!this.title.textMesh)
+                    {
+                        this.title.textMesh = child
+                        console.log(`[LabArea] Encontrado textMesh alternativo: ${child.name}`)
+                    }
+                }
+            })
+        }
+        
+        if(!this.title.textMesh)
+        {
+            console.error('[LabArea] ⚠️ No se pudo encontrar textMesh para title')
+            // Definir update como función dummy para evitar errores
+            this.title.update = () => {}
+            return
+        }
+        
         this.title.textCanvas = new TextCanvas(
             this.texts.fontFamily,
             this.texts.fontWeight,
@@ -636,11 +772,54 @@ export class LabArea extends Area
         this.url = {}
         this.url.status = 'hidden'
         this.url.group = this.references.items.get('url')[0]
+        
+        if(!this.url.group)
+        {
+            console.error('[LabArea] No se encontró el grupo de url')
+            // Definir update como función dummy para evitar errores
+            this.url.update = () => {}
+            return
+        }
+        
         this.url.inner = this.url.group.children[0]
+        
+        if(!this.url.inner)
+        {
+            console.error('[LabArea] No se encontró inner en url.group')
+            // Definir update como función dummy para evitar errores
+            this.url.update = () => {}
+            return
+        }
 
         // Text
         this.url.textMesh = this.url.inner.children.find(_child => _child.name.startsWith('text'))
         this.url.panel = this.url.inner.children.find(_child => _child.name.startsWith('panel'))
+        
+        if(!this.url.textMesh)
+        {
+            console.warn('[LabArea] No se encontró textMesh en url.inner.children. Buscando alternativamente...')
+            // Buscar cualquier mesh que pueda ser el texto
+            this.url.inner.traverse((child) =>
+            {
+                if(child.isMesh && (child.name.toLowerCase().includes('text') || !this.url.textMesh))
+                {
+                    if(!this.url.textMesh)
+                    {
+                        this.url.textMesh = child
+                        console.log(`[LabArea] Encontrado textMesh alternativo: ${child.name}`)
+                    }
+                }
+            })
+        }
+        
+        if(!this.url.textMesh)
+        {
+            console.error('[LabArea] ⚠️ No se pudo encontrar textMesh para url')
+            // Definir update como función dummy para evitar errores
+            this.url.update = () => {}
+            return
+        }
+        
         this.url.textCanvas = new TextCanvas(
             this.texts.fontFamily,
             this.texts.fontWeight,
@@ -801,6 +980,11 @@ export class LabArea extends Area
                 const mini = {}
                 mini.index = i
                 mini.y = - i * this.scroller.minis.inter
+                // Inicializar propiedades que siempre deben estar definidas, incluso si hay continue
+                mini.textMixStrength = uniform(0)
+                mini.intersect = { active: false } // Intersect dummy por defecto
+                mini.startedLoading = false
+                mini.startLoading = () => {} // Función dummy por defecto
                 this.scroller.minis.items.push(mini)
 
                 // Group
@@ -829,8 +1013,31 @@ export class LabArea extends Area
 
                 // Image
                 {
-                    imageMesh.visible = false
-
+                    if(imageMesh)
+                    {
+                        imageMesh.visible = false
+                    }
+                    else
+                    {
+                        console.warn(`[LabArea] No se encontró imageMesh para mini ${i}. Buscando en grupo:`, mini.group)
+                        // Buscar cualquier mesh que pueda ser la imagen
+                        mini.group.traverse((child) =>
+                        {
+                            if(child.isMesh && child.name.toLowerCase().includes('image'))
+                            {
+                                imageMesh = child
+                                console.log(`[LabArea] Encontrado imageMesh alternativo: ${child.name}`)
+                            }
+                        })
+                    }
+                    
+                    if(!imageMesh)
+                    {
+                        console.error(`[LabArea] ⚠️ No se pudo encontrar imageMesh para mini ${i}`)
+                        // Ya definimos mini.startLoading como función dummy arriba, así que no necesitamos hacer nada más
+                        continue // Saltar este mini si no tiene imageMesh
+                    }
+                    
                     // Load
                     mini.startedLoading = false
                     mini.startLoading = () =>
@@ -838,12 +1045,24 @@ export class LabArea extends Area
                         if(mini.startedLoading)
                             return
 
+                        if(!imageMesh)
+                        {
+                            console.error(`[LabArea] ⚠️ imageMesh no está disponible para mini ${i}`)
+                            return
+                        }
+
                         const loader = this.game.resourcesLoader.getLoader('textureKtx')
 
                         loader.load(
                             `lab/images/${project.imageMini}`,
                             (loadedTexture) =>
                             {
+                                if(!imageMesh)
+                                {
+                                    console.error(`[LabArea] ⚠️ imageMesh se perdió durante la carga para mini ${i}`)
+                                    return
+                                }
+
                                 const alpha = uniform(0)
                                 const textureColor = texture(loadedTexture).rgb
                                 gsap.to(alpha, { value: 1, duration: 1, overwrite: true })
@@ -886,77 +1105,112 @@ export class LabArea extends Area
 
                 // Text
                 {
-                    mini.textMixStrength = uniform(0)
-
-                    const textCanvas = new TextCanvas(
-                        this.texts.fontFamily,
-                        this.texts.fontWeight,
-                        this.texts.fontSizeMultiplier * 0.18,
-                        1.5,
-                        0.2,
-                        this.texts.density,
-                        'center',
-                        0.2
-                    )
-                    textCanvas.updateText(project.title)
-
-                    const ratio = textCanvas.getMeasure().width / this.texts.density
-                    panelMesh.scale.x = ratio + 0.2
-
-                    // Material
-                    const material = new MeshDefaultMaterial({
-                        colorNode: this.texts.baseColor,
-                        hasWater: false,
-                        hasLightBounce: false,
-                        alphaNode: texture(textCanvas.texture).r,
-                        transparent: true
-                    })
-                    
-                    const baseOutput = material.outputNode
-                    
-                    material.outputNode = Fn(() =>
+                    if(!textMesh)
                     {
-                        return vec4(
-                            mix(
-                                mix(
-                                    baseOutput.rgb,
-                                    this.texts.baseColor,
-                                    this.shadeMix.texts.mixUniform
-                                ),
-                                this.texts.baseColor.mul(1.5),
-                                mini.textMixStrength
-                            ),
-                            baseOutput.a
-                        )
-                    })()
+                        console.warn(`[LabArea] No se encontró textMesh para mini ${i}. Buscando alternativamente...`)
+                        // Buscar cualquier mesh que pueda ser el texto
+                        mini.group.traverse((child) =>
+                        {
+                            if(child.isMesh && child.name.toLowerCase().includes('text') && !textMesh)
+                            {
+                                textMesh = child
+                                console.log(`[LabArea] Encontrado textMesh alternativo: ${child.name}`)
+                            }
+                        })
+                    }
 
-                    // Mesh
-                    textMesh.castShadow = false
-                    textMesh.receiveShadow = false
-                    textMesh.material = material
+                    if(!textMesh)
+                    {
+                        console.warn(`[LabArea] ⚠️ No se pudo encontrar textMesh para mini ${i}, saltando configuración de texto`)
+                    }
+                    else
+                    {
+                        const textCanvas = new TextCanvas(
+                            this.texts.fontFamily,
+                            this.texts.fontWeight,
+                            this.texts.fontSizeMultiplier * 0.18,
+                            1.5,
+                            0.2,
+                            this.texts.density,
+                            'center',
+                            0.2
+                        )
+                        textCanvas.updateText(project.title)
+
+                        if(panelMesh)
+                        {
+                            const ratio = textCanvas.getMeasure().width / this.texts.density
+                            panelMesh.scale.x = ratio + 0.2
+                        }
+
+                        // Material
+                        const material = new MeshDefaultMaterial({
+                            colorNode: this.texts.baseColor,
+                            hasWater: false,
+                            hasLightBounce: false,
+                            alphaNode: texture(textCanvas.texture).r,
+                            transparent: true
+                        })
+                        
+                        const baseOutput = material.outputNode
+                        
+                        material.outputNode = Fn(() =>
+                        {
+                            return vec4(
+                                mix(
+                                    mix(
+                                        baseOutput.rgb,
+                                        this.texts.baseColor,
+                                        this.shadeMix.texts.mixUniform
+                                    ),
+                                    this.texts.baseColor.mul(1.5),
+                                    mini.textMixStrength
+                                ),
+                                baseOutput.a
+                            )
+                        })()
+
+                        // Mesh
+                        textMesh.castShadow = false
+                        textMesh.receiveShadow = false
+                        textMesh.material = material
+                    }
                 }
 
                 // Intersect
-                intersectMesh.visible = false      
-                mini.intersect = this.game.rayCursor.addIntersect({
-                    active: false,
-                    shape: intersectMesh,
-                    onClick: () =>
-                    {
-                        this.changeProject(mini.index)
-                    },
-                    onEnter: () =>
-                    {
-                        mini.textMixStrength.value = 1
-                    },
-                    onLeave: () =>
-                    {
-                        if(mini.index === this.navigation.index)
-                            mini.textMixStrength.value = 1
-                        else
-                            mini.textMixStrength.value = 0
-                    }
-                })
+                if(!intersectMesh)
+                {
+                    console.warn(`[LabArea] No se encontró intersectMesh para mini ${i}, saltando intersect`)
+                    // Crear un intersect dummy para evitar errores
+                    mini.intersect = { active: false }
+                }
+                else
+                {
+                    intersectMesh.visible = false
+                    mini.intersect = this.game.rayCursor.addIntersect({
+                        active: false,
+                        shape: intersectMesh,
+                        onClick: () =>
+                        {
+                            this.changeProject(mini.index)
+                        },
+                        onEnter: () =>
+                        {
+                            if(mini.textMixStrength)
+                                mini.textMixStrength.value = 1
+                        },
+                        onLeave: () =>
+                        {
+                            if(mini.textMixStrength)
+                            {
+                                if(mini.index === this.navigation.index)
+                                    mini.textMixStrength.value = 1
+                                else
+                                    mini.textMixStrength.value = 0
+                            }
+                        }
+                    })
+                }
 
                 i++
             }
@@ -990,7 +1244,10 @@ export class LabArea extends Area
                 mini.group.scale.y = scale
 
                 mini.group.visible = scale > 0
-                mini.intersect.active = mini.group.visible && (this.state === LabArea.STATE_OPEN || this.state === LabArea.STATE_OPENING)
+                if(mini.intersect)
+                {
+                    mini.intersect.active = mini.group.visible && (this.state === LabArea.STATE_OPEN || this.state === LabArea.STATE_OPENING)
+                }
 
                 if(mini.group.visible && !mini.startedLoading)
                 {
@@ -1007,12 +1264,19 @@ export class LabArea extends Area
             this.scroller.targetProgress = closestProgress
 
             // Active text
-            if(this.scroller.minis.current)
+            if(this.scroller.minis.current && this.scroller.minis.current.textMixStrength)
                 this.scroller.minis.current.textMixStrength.value = 0
 
             const mini = this.scroller.minis.items[this.navigation.index]
-            mini.textMixStrength.value = 1
-            this.scroller.minis.current = mini
+            if(mini && mini.textMixStrength)
+            {
+                mini.textMixStrength.value = 1
+                this.scroller.minis.current = mini
+            }
+            else
+            {
+                console.warn(`[LabArea] ⚠️ Mini en índice ${this.navigation.index} no tiene textMixStrength`)
+            }
         }
 
         // Inputs
@@ -1447,6 +1711,92 @@ export class LabArea extends Area
         // Achievements
         if(this.state === LabArea.STATE_OPEN)
             this.game.achievements.setProgress('lab', this.navigation.current.title)
+    }
+
+    setSupabaseLogo()
+    {
+        // Color oficial de Supabase: #34B27B (Jungle Green)
+        const supabaseGreen = new THREE.Color(0x34B27B)
+        
+        // Función para aplicar el color al logo
+        const applySupabaseColor = (mesh, meshName) =>
+        {
+            if(!mesh || !mesh.isMesh)
+                return
+
+            const meshNameLower = meshName.toLowerCase()
+            
+            // Buscar logo de Supabase (excluir texto/letras)
+            // Debe contener "supabase" pero NO contener "text", "letter", "wordmark", o "type"
+            const isSupabaseLogo = (
+                meshNameLower.includes('supabase') &&
+                !meshNameLower.includes('text') &&
+                !meshNameLower.includes('letter') &&
+                !meshNameLower.includes('wordmark') &&
+                !meshNameLower.includes('type') &&
+                (
+                    meshNameLower.includes('logo') ||
+                    meshNameLower.includes('icon') ||
+                    meshNameLower.includes('symbol')
+                )
+            )
+
+            if(isSupabaseLogo)
+            {
+                // Aplicar color verde oficial de Supabase al logo
+                try
+                {
+                    // Crear un nuevo material con el color de Supabase
+                    const supabaseMaterial = new MeshDefaultMaterial({
+                        colorNode: color(supabaseGreen),
+                        hasWater: false,
+                        hasLightBounce: false
+                    })
+                    
+                    // Preservar propiedades importantes del material original
+                    if(mesh.material)
+                    {
+                        if(mesh.material.transparent !== undefined)
+                            supabaseMaterial.transparent = mesh.material.transparent
+                        if(mesh.material.opacity !== undefined)
+                            supabaseMaterial.opacity = mesh.material.opacity
+                        if(mesh.material.alphaTest !== undefined)
+                            supabaseMaterial.alphaTest = mesh.material.alphaTest
+                    }
+                    
+                    mesh.material = supabaseMaterial
+                    console.log(`[LabArea] ✓ Color de Supabase (#34B27B) aplicado al logo: ${meshName}`)
+                }
+                catch(error)
+                {
+                    console.error(`[LabArea] Error aplicando color de Supabase a ${meshName}:`, error)
+                }
+            }
+        }
+
+        // Buscar en el modelo directamente
+        this.model.traverse((child) =>
+        {
+            if(child.isMesh)
+            {
+                applySupabaseColor(child, child.name)
+            }
+        })
+
+        // También buscar en objetos ya cargados en this.objects.items
+        for(const object of this.objects.items)
+        {
+            if(object.visual && object.visual.object3D)
+            {
+                object.visual.object3D.traverse((child) =>
+                {
+                    if(child.isMesh)
+                    {
+                        applySupabaseColor(child, child.name)
+                    }
+                })
+            }
+        }
     }
 
     update()

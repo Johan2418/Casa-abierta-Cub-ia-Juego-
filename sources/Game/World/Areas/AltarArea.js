@@ -30,6 +30,7 @@ export class AltarArea extends Area
         
         // Agregar física a los objetos de la casa
         this.setHousePhysics()
+        this.setLogoUleam()
 
         this.color = uniform(color('#ff544d'))
         this.emissive = uniform(8)
@@ -58,6 +59,236 @@ export class AltarArea extends Area
         {
             this.game.debug.addThreeColorBinding(this.debugPanel, this.color.value, 'color')
             this.debugPanel.addBinding(this.emissive, 'value', { label: 'emissive', min: 0, max: 10, step: 0.1 })
+        }
+    }
+
+    setLogoUleam()
+    {
+        // Try direct reference names first
+        const ref = this.references.items.get('logoUleam') || this.references.items.get('logo') || this.references.items.get('logoUleam01')
+        let logo = ref && ref[0] ? ref[0] : null
+
+        // Fallback: search starting-with 'logo'
+        if(!logo)
+        {
+            const map = this.references.getStartingWith('logo')
+            if(map && map.size)
+                logo = map.values().next().value[0]
+        }
+
+        // If found, force visible, assign basic material to all meshes and run diagnostics
+        if(logo)
+        {
+            logo.visible = true;
+            let meshCount = 0;
+            let anyMesh = null;
+            logo.traverse(child => {
+                if(child.isMesh){
+                    child.visible = true;
+                    meshCount++;
+                    anyMesh = anyMesh || child;
+                    // If material is missing or not visible, assign MeshBasicMaterial
+                    if(!child.material || (child.material.visible === false) || (child.material.color && child.material.color.getHex() === 0x000000)){
+                        child.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                    }
+                    // Avoid frustum culling for logo meshes
+                    child.frustumCulled = false;
+                    child.renderOrder = 999;
+                }
+            });
+            this.game.materials.updateObject(logo);
+            if(this.objects && this.objects.hideable && this.objects.hideable.indexOf(logo) === -1)
+                this.objects.hideable.push(logo);
+
+            // Diagnostics: bounding box and world position (granular checks)
+            try{
+                let bbox = null;
+                try{
+                    bbox = new THREE.Box3();
+                    bbox.setFromObject(logo);
+                }
+                catch(innerErr){
+                    console.warn('[AltarArea] logoUleam bbox.setFromObject failed:', innerErr && innerErr.message ? innerErr.message : innerErr);
+                }
+
+                let size = null;
+                let center = null;
+                if(bbox){
+                    try{
+                        size = new THREE.Vector3();
+                        bbox.getSize(size);
+                        center = new THREE.Vector3();
+                        bbox.getCenter(center);
+                    }
+                    catch(innerErr){
+                        console.warn('[AltarArea] logoUleam bbox size/center calc failed:', innerErr && innerErr.message ? innerErr.message : innerErr);
+                    }
+                }
+
+                let worldPos = null;
+                try{
+                    worldPos = new THREE.Vector3();
+                    logo.getWorldPosition(worldPos);
+                }
+                catch(innerErr){
+                    console.warn('[AltarArea] logoUleam getWorldPosition failed:', innerErr && innerErr.message ? innerErr.message : innerErr);
+                }
+
+                console.log('[AltarArea] logoUleam diagnostics:', { name: logo.name, meshCount, size, center, worldPos, children: logo.children.map(c => c.name || c.type) });
+
+                // Per-mesh diagnostics + stronger visibility forcing
+                try{
+                    const meshDetails = [];
+                    logo.traverse(child => {
+                        if(child.isMesh){
+                            meshDetails.push({ name: child.name || '(noname)', visible: child.visible, material: child.material && child.material.type, color: child.material && child.material.color && ('#' + child.material.color.getHexString()), vertexCount: child.geometry && child.geometry.attributes && child.geometry.attributes.position && child.geometry.attributes.position.count });
+
+                            // Force visible material and rendering overrides
+                            child.visible = true;
+                            child.frustumCulled = false;
+                            child.renderOrder = 9999;
+                            try{
+                                child.material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                                child.material.side = THREE.DoubleSide;
+                                child.material.depthTest = false;
+                                child.material.transparent = false;
+                                child.receiveShadow = false;
+                                child.castShadow = false;
+                            }
+                            catch(matErr){ console.warn('[AltarArea] Failed assigning fallback material to mesh', child.name, matErr); }
+                        }
+                    });
+
+                    console.log('[AltarArea] logo meshes:', meshDetails);
+
+                    // Parent chain for debugging
+                    const chain = [];
+                    let p = logo.parent;
+                    while(p){ chain.push(p.name || p.type); p = p.parent; }
+                    console.log('[AltarArea] logo parent chain:', chain.join(' -> '));
+
+                    // Create a visible overlay group that duplicates the meshes with a simple material so the logo is guaranteed to be visible
+                    try{
+                        // Remove previous overlay if any
+                        const prev = this.game.scene.getObjectByName('logoUleam_overlay');
+                        if(prev) this.game.scene.remove(prev);
+
+                        const overlayGroup = new THREE.Group();
+                        overlayGroup.name = 'logoUleam_overlay';
+
+                        logo.updateWorldMatrix(true, true);
+                        logo.traverse(child => {
+                            if(child.isMesh && child.geometry){
+                                try{
+                                    const geom = child.geometry.clone();
+                                    geom.computeBoundingSphere && geom.computeBoundingSphere();
+                                    const mat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide, depthTest: false });
+                                    const overlay = new THREE.Mesh(geom, mat);
+                                    // Use world transform to position overlay correctly
+                                    child.updateWorldMatrix(true, false);
+                                    const worldMat = child.matrixWorld;
+                                    const pos = new THREE.Vector3();
+                                    const quat = new THREE.Quaternion();
+                                    const scl = new THREE.Vector3();
+                                    worldMat.decompose(pos, quat, scl);
+                                    overlay.position.copy(pos);
+                                    overlay.quaternion.copy(quat);
+                                    overlay.scale.copy(scl);
+                                    overlay.renderOrder = 99999;
+                                    overlay.frustumCulled = false;
+                                    overlay.name = 'logoUleam_overlay_mesh';
+                                    overlayGroup.add(overlay);
+                                }
+                                catch(inner){ console.warn('[AltarArea] overlay creation failed for mesh', child.name, inner); }
+                            }
+                        });
+
+                        if(overlayGroup.children.length)
+                        {
+                            this.game.scene.add(overlayGroup);
+                            console.log('[AltarArea] logoUleam overlay added with', overlayGroup.children.length, 'meshes');
+                        }
+                    }
+                    catch(e){ console.warn('[AltarArea] overlay group failed:', e); }
+
+                } catch(e){ console.warn('[AltarArea] logoUleam per-mesh diagnostics failed:', e); }
+                // Only act if we have valid size/worldPos data
+                if(size && worldPos){
+                    const minDim = Math.min(size.x || 0, size.y || 0, size.z || 0);
+
+                    // If tiny, scale up and move to altar center for visibility testing
+                    if(minDim <= 0.001)
+                    {
+                        const altarPos = (this.references.items.get('altar') && this.references.items.get('altar')[0]) ? this.references.items.get('altar')[0].position.clone() : this.model.position.clone();
+                        logo.position.copy(altarPos);
+                        logo.position.y += 0.6;
+                        logo.scale.set(2,2,2);
+                        console.log('[AltarArea] logoUleam appeared too small or degenerate; repositioned near altar and scaled up', altarPos);
+                    }
+
+                    const altarY = (this.references.items.get('altar') && this.references.items.get('altar')[0]) ? this.references.items.get('altar')[0].position.y : this.model.position.y;
+                    if(worldPos.y < altarY - 0.5)
+                    {
+                        logo.position.y = altarY + 0.8;
+                        console.log('[AltarArea] logoUleam was below ground; lifted to', logo.position.y);
+                    }
+
+                    // Set goal world position exactly (to avoid pivot offsets) and add larger debug marker at worldPos
+                    try{
+                        logo.position.copy(worldPos);
+                        logo.position.y += 0.1; // nudge above ground
+                        logo.scale.multiplyScalar(2);
+                        if(logo.quaternion) logo.quaternion.set(0,0,0,1);
+
+                        const markerSize = Math.max(size.x, size.y, size.z) * 0.1 || 0.2;
+                        const markerGeom = new THREE.SphereGeometry(markerSize, 8, 8);
+                        const markerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, depthTest: false });
+                        const marker = new THREE.Mesh(markerGeom, markerMat);
+                        marker.name = 'debug_logo_marker_big';
+                        marker.position.copy(worldPos);
+                        marker.position.y += 0.1;
+                        this.game.scene.add(marker);
+                        console.log('[AltarArea] debug BIG marker placed at', worldPos, 'markerSize:', markerSize);
+                    } catch(e){ console.warn('[AltarArea] failed to create BIG debug marker:', e); }
+                }
+            }
+            catch(e){
+                // Include stack for more context
+                console.warn('[AltarArea] logoUleam diagnostics failed (unexpected):', e && e.message ? e.message : e, e && e.stack ? e.stack : 'no-stack');
+            }
+
+            // Ensure the logo is attached to the area model so it's inside the scene graph
+            if(!logo.parent) {
+                this.model.add(logo);
+                console.log('[AltarArea] logoUleam had no parent: added to area model');
+            }
+        }
+        else
+        {
+            // Try searching loaded objects for a matching name
+            const found = this.objects.items.find(o => o.visual && o.visual.object3D && /logo/i.test(o.visual.object3D.name));
+            if(found)
+            {
+                const obj = found.visual.object3D;
+                obj.visible = true;
+                obj.traverse(child => {
+                    if(child.isMesh){
+                        child.visible = true;
+                        if(!child.material || (child.material.visible === false) || (child.material.color && child.material.color.getHex() === 0x000000)){
+                            child.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                        }
+                        child.frustumCulled = false;
+                        child.renderOrder = 999;
+                    }
+                });
+                this.game.materials.updateObject(obj);
+                if(this.objects.hideable.indexOf(obj) === -1) this.objects.hideable.push(obj);
+                console.log('[AltarArea] logo found in objects:', obj.name);
+            }
+            else
+            {
+                console.warn('[AltarArea] logoUleam not found in references or objects');
+            }
         }
     }
 

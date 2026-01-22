@@ -30,8 +30,24 @@ export class CookieArea extends Area
         this.setCookies()
         this.setActualCookies()
         this.setInteractivePoint()
+        this.setClubIALogo()
         this.setCounter()
         this.setAchievement()
+    }
+
+    getReference(name)
+    {
+        const ref = this.references.items.get(name)[0]
+
+        // If the reference is the dummy created by References._ensureSafeGet, try "startsWith" matches
+        if(ref && ref.userData && ref.userData.object && ref.userData.object.physical)
+        {
+            const map = this.references.getStartingWith(name)
+            if(map.size > 0)
+                return map.values().next().value[0]
+        }
+
+        return ref
     }
 
     setSound()
@@ -54,7 +70,7 @@ export class CookieArea extends Area
 
     setBlower()
     {
-        this.blower = this.references.items.get('blower')[0]
+        this.blower = this.getReference('blower')
     }
 
     setBanner()
@@ -176,14 +192,27 @@ export class CookieArea extends Area
             return vec4(vec3(emissiveColor), strength)
         })()
 
-        this.ovenHeat = this.references.items.get('ovenHeat')[0]
+        this.ovenHeat = this.getReference('ovenHeat')
         this.ovenHeat.material = material
         this.ovenHeat.castShadow = false
     }
 
+    setClubIALogo()
+    {
+        const logo = this.getReference('clubIALogo')
+        if(!logo) return
+
+        // Make sure it's visible and materials are updated
+        logo.visible = true
+        this.game.materials.updateObject(logo)
+
+        if(this.objects && this.objects.hideable && this.objects.hideable.indexOf(logo) === -1)
+            this.objects.hideable.push(logo)
+    }
+
     setCookies()
     {
-        const baseCookie = this.references.items.get('cookie')[0]
+        const baseCookie = this.getReference('cookie')
         baseCookie.castShadow = true
         baseCookie.receiveShadow = true
         baseCookie.frustumCulled = true
@@ -193,7 +222,7 @@ export class CookieArea extends Area
         this.game.materials.updateObject(baseCookie)
 
         this.cookies = {}
-        this.cookies.spawnerPosition = this.references.items.get('spawner')[0].position
+        this.cookies.spawnerPosition = this.getReference('spawner').position
         this.cookies.count = 20
         this.cookies.visibleCount = 0
         this.cookies.realCount = this.cookies.count + 2
@@ -212,7 +241,7 @@ export class CookieArea extends Area
 
             if(onTable)
             {
-                reference.position.copy(this.references.items.get('table')[0].position)
+                reference.position.copy(this.getReference('table').position)
                 reference.position.y += (i - this.cookies.count) * 0.25
             }
             else
@@ -269,7 +298,7 @@ export class CookieArea extends Area
     setInteractivePoint()
     {
         this.game.interactivePoints.create(
-            this.references.items.get('interactivePoint')[0].position,
+            this.getReference('interactivePoint').position,
             'Accept cookie',
             InteractivePoints.ALIGN_RIGHT,
             InteractivePoints.STATE_CONCEALED,
@@ -296,7 +325,7 @@ export class CookieArea extends Area
     {
         this.counter = {}
         this.counter.value = 0
-        this.counter.panel = this.references.items.get('counterPanel')[0]
+        this.counter.panel = this.getReference('counterPanel')
         this.counter.texture = null
         this.counter.initialised = false
         this.counter.maxScale = 0
@@ -350,8 +379,9 @@ export class CookieArea extends Area
 
             // Mesh
             const mesh = new THREE.Mesh(geometry, material)
-            mesh.position.copy(this.references.items.get('counterLabel')[0].position)
-            mesh.quaternion.copy(this.references.items.get('counterLabel')[0].quaternion)
+            const counterLabelRef = this.getReference('counterLabel')
+            mesh.position.copy(counterLabelRef.position)
+            mesh.quaternion.copy(counterLabelRef.quaternion)
             mesh.receiveShadow = true
             mesh.scale.y = 0.75
             mesh.scale.x = canvas.width / canvas.height * 0.75

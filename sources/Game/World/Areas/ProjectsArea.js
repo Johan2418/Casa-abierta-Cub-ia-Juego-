@@ -34,7 +34,9 @@ export class ProjectsArea extends Area
         this.state = ProjectsArea.STATE_CLOSED
 
         this.setSounds()
-        this.setInteractivePoint()
+        // Temporarily disable the Projects interactive point (removed on request)
+        // this.setInteractivePoint()
+        console.info('[ProjectsArea] interactive point for Projects is temporarily disabled')
         this.setInputs()
         this.setCinematic()
         this.setShadeMix()
@@ -53,6 +55,9 @@ export class ProjectsArea extends Area
         this.setGrinder()
         this.setAnvil()
         this.setAchievement()
+
+        // Ensure cursor logo colors are applied to new GLB references
+        this.setCursorLogoColors()
 
         this.changeProject(0, ProjectsArea.DIRECTION_NEXT, false, true)
 
@@ -173,6 +178,136 @@ export class ProjectsArea extends Area
         })
     }
 
+    // Apply exact colors to the Cursor logo (`cursorlogo01`) and its parts.
+    // Defaults: primary = #00AEEF. If you want other exact colors, pass a color map to the method.
+    setCursorLogoColors(colorMap = null)
+    {
+        const defaults = {
+            primary: '#00AEEF',
+            secondary: '#FFFFFF',
+            accent: '#002A5C'
+        }
+
+        const colors = Object.assign({}, defaults, colorMap || {})
+
+        try
+        {
+            const logoRef = this.references.items.get('cursorlogo01') || this.references.items.get('cursorlogo') || this.references.items.get('cursorLogo')
+            if(!logoRef || !logoRef[0])
+                return
+
+            const logo = logoRef[0]
+
+            logo.traverse((child) =>
+            {
+                if(!child.isMesh)
+                    return
+
+                // Pick color by mesh name patterns when available
+                const name = (child.name || '').toLowerCase()
+                let applyHex = colors.primary
+                if(name.includes('outline') || name.includes('stroke') || name.includes('border'))
+                    applyHex = colors.secondary
+                else if(name.includes('accent') || name.includes('dot') || name.includes('mark'))
+                    applyHex = colors.accent
+
+                const original = child.material
+
+                // Helper to attempt multiple strategies
+                const applyColorToMaterial = (mat, hex) =>
+                {
+                    if(!mat) return false
+
+                    // 1) Direct color/emissive
+                    if(typeof mat.color !== 'undefined' || typeof mat.emissive !== 'undefined')
+                    {
+                        try
+                        {
+                            if(typeof mat.color !== 'undefined') mat.color.set(hex)
+                            if(typeof mat.emissive !== 'undefined') mat.emissive.set(hex)
+                            mat.needsUpdate = true
+                            console.info('[ProjectsArea] applied color via direct props on', child.name, mat.constructor.name)
+                            return true
+                        }
+                        catch(e){}
+                    }
+
+                    // 2) MeshDefaultMaterial / Node-material style: try set colorNode
+                    try
+                    {
+                        if(typeof mat.colorNode !== 'undefined')
+                        {
+                            mat.colorNode = color(hex)
+                            mat.needsUpdate = true
+                            console.info('[ProjectsArea] applied color via colorNode on', child.name, mat.constructor.name)
+                            return true
+                        }
+
+                        // Some custom materials expose outputNode - try to set colorNode fallback
+                        if(typeof mat.outputNode !== 'undefined' && typeof mat.colorNode === 'undefined')
+                        {
+                            // assign colorNode to guide the material's color in future compiles
+                            mat.colorNode = color(hex)
+                            mat.needsUpdate = true
+                            console.info('[ProjectsArea] set colorNode on outputNode-material', child.name, mat.constructor.name)
+                            return true
+                        }
+                    }
+                    catch(e){}
+
+                    // 3) As last resort, replace with a new MeshDefaultMaterial that uses colorNode
+                    try
+                    {
+                        const replacement = new MeshDefaultMaterial({ colorNode: color(hex), hasWater: false })
+                        replacement.needsUpdate = true
+                        child.material = replacement
+                        console.info('[ProjectsArea] replaced material for', child.name, 'with MeshDefaultMaterial')
+                        return true
+                    }
+                    catch(e){}
+
+                    return false
+                }
+
+                // If material is array, handle each
+                if(Array.isArray(original))
+                {
+                    let any = false
+                    const newM = []
+                    for(const m of original)
+                    {
+                        const ok = applyColorToMaterial(m, applyHex)
+                        any = any || ok
+                        newM.push(m)
+                    }
+                    if(any)
+                        child.material = newM
+                }
+                else
+                {
+                    const ok = applyColorToMaterial(original, applyHex)
+                    if(!ok)
+                    {
+                        // try to at least set visible color on a simple MeshBasicMaterial
+                        try
+                        {
+                            child.material = new THREE.MeshBasicMaterial({ color: applyHex })
+                            console.info('[ProjectsArea] fallback set MeshBasicMaterial on', child.name)
+                        }
+                        catch(e)
+                        {
+                            console.warn('[ProjectsArea] failed to set fallback material on', child.name, e)
+                        }
+                    }
+                }
+            })
+        }
+        catch(e)
+        {
+            console.warn('[ProjectsArea] setCursorLogoColors failed:', e)
+        }
+    }
+
     setCinematic()
     {
         this.cinematic = {}
@@ -263,6 +398,12 @@ export class ProjectsArea extends Area
 
         this.texts.createMaterialOnMesh = (mesh, textTexture) =>
         {
+            if(!mesh)
+            {
+                console.error('[ProjectsArea] createMaterialOnMesh received mesh null/undefined')
+                return
+            }
+
             const material = new MeshDefaultMaterial({
                 hasWater: false,
                 alphaNode: texture(textTexture).r,
@@ -977,6 +1118,20 @@ export class ProjectsArea extends Area
         })()
 
         // Mesh
+        if(!this.url.textMesh)
+        {
+            console.warn('[ProjectsArea] setUrl: missing text mesh for url')
+            const geometry = new THREE.BufferGeometry()
+            const positions = new Float32Array([0,0,0, 0,0,1])
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+            const fallbackMaterial = new THREE.MeshBasicMaterial({ visible: false })
+            const fallbackMesh = new THREE.Mesh(geometry, fallbackMaterial)
+            fallbackMesh.castShadow = false
+            fallbackMesh.receiveShadow = false
+            fallbackMesh.material = fallbackMaterial
+            this.url.textMesh = fallbackMesh
+        }
+
         this.url.textMesh.castShadow = false
         this.url.textMesh.receiveShadow = false
         this.url.textMesh.material = material
@@ -1074,7 +1229,15 @@ export class ProjectsArea extends Area
             {
                 const item = this.distinctions.items[name]
 
-                gsap.to(item.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 0.5, delay: 0.1 * i, ease: 'power2.in', overwrite: true })
+                if(!item)
+                {
+                    console.warn('[ProjectsArea] distinctions: missing item for', name)
+                    i++
+                    continue
+                }
+
+                if(item.scale)
+                    gsap.to(item.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 0.5, delay: 0.1 * i, ease: 'power2.in', overwrite: true })
                 i++
             }
 
@@ -1088,11 +1251,22 @@ export class ProjectsArea extends Area
                 {
                     const item = this.distinctions.items[name]
 
-                    item.visible = true
-                    gsap.to(item.scale, { x: 1, y: 1, z: 1, duration: 1, delay: 0.2 * i, ease: 'back.out(2)', overwrite: true })
+                    if(!item)
+                    {
+                        console.warn('[ProjectsArea] distinctions: missing item for', name)
+                        i++
+                        continue
+                    }
 
-                    item.position.x = positions[i][0]
-                    item.position.z = positions[i][1]
+                    item.visible = true
+                    if(item.scale)
+                        gsap.to(item.scale, { x: 1, y: 1, z: 1, duration: 1, delay: 0.2 * i, ease: 'back.out(2)', overwrite: true })
+
+                    if(item.position)
+                    {
+                        item.position.x = positions[i][0]
+                        item.position.z = positions[i][1]
+                    }
 
                     i++
                 }
@@ -1199,47 +1373,59 @@ export class ProjectsArea extends Area
 
     setOven()
     {
+        // Make setOven resilient: ensure this.oven exists even if parts fail
         this.oven = {}
-
-        // Blower
-        this.oven.blower = this.references.items.get('blower')[0]
-
-        // Charcoal
-        this.oven.charcoal = this.references.items.get('charcoal')[0]
-
-        this.oven.threshold = uniform(0.2)
-
-        const alphaNode = Fn(() =>
+        try
         {
-            const baseUv = uv()
+            // Blower
+            this.oven.blower = this.references.items.get('blower')[0]
 
-            const voronoi = texture(
-                this.game.noises.voronoi,
-                baseUv
-            ).g
+            // Charcoal
+            this.oven.charcoal = this.references.items.get('charcoal')[0]
 
-            voronoi.subAssign(this.oven.threshold)
+            this.oven.threshold = uniform(0.2)
 
-            return voronoi
-        })()
+            const alphaNode = Fn(() =>
+            {
+                const baseUv = uv()
 
-        const material = new MeshDefaultMaterial({
-            colorNode: color(0x6F6A87),
-            alphaNode: alphaNode,
-            hasWater: false,
-            hasLightBounce: false
-        })
+                const voronoi = texture(
+                    this.game.noises.voronoi,
+                    baseUv
+                ).g
 
-        this.oven.charcoal.material = material
+                voronoi.subAssign(this.oven.threshold)
 
-        // Debug
-        this.oven.thresholdBinding = this.game.debug.addManualBinding(
-            this.debugPanel,
-            this.oven.threshold,
-            'value',
-            { label: 'ovenThreshold', min: 0, max: 1, step: 0.001 },
-            () => - Math.sin(this.game.ticker.elapsedScaled - 0.5) * 0.1 + 0.25
-        )
+                return voronoi
+            })()
+
+            const material = new MeshDefaultMaterial({
+                colorNode: color(0x6F6A87),
+                alphaNode: alphaNode,
+                hasWater: false,
+                hasLightBounce: false
+            })
+
+            this.oven.charcoal.material = material
+
+            // Debug
+            this.oven.thresholdBinding = this.game.debug.addManualBinding(
+                this.debugPanel,
+                this.oven.threshold,
+                'value',
+                { label: 'ovenThreshold', min: 0, max: 1, step: 0.001 },
+                () => - Math.sin(this.game.ticker.elapsedScaled - 0.5) * 0.1 + 0.25
+            )
+        }
+        catch(e)
+        {
+            console.warn('[ProjectsArea] setOven failed:', e)
+            // Ensure minimal shape so update() guards can operate
+            if(!this.oven.blower)
+                this.oven.blower = { scale: { y: 1 } }
+            if(!this.oven.thresholdBinding)
+                this.oven.thresholdBinding = { update: () => {} }
+        }
     }
 
     setGrinder()
@@ -1534,22 +1720,44 @@ export class ProjectsArea extends Area
 
     update()
     {
-        // Oven
-        this.oven.blower.scale.y = (Math.sin(this.game.ticker.elapsedScaled) * 0.2 + 0.8)
-        this.oven.thresholdBinding.update()
+        // Oven (guard against incomplete initialization)
+        if(this.oven)
+        {
+            if(this.oven.blower && this.oven.blower.scale)
+                this.oven.blower.scale.y = (Math.sin(this.game.ticker.elapsedScaled) * 0.2 + 0.8)
+
+            if(this.oven.thresholdBinding && typeof this.oven.thresholdBinding.update === 'function')
+                this.oven.thresholdBinding.update()
+        }
 
         // Grinder
-        this.grinder.rotation.z = - this.game.ticker.elapsedScaled * 0.75
+        if(this.grinder && this.grinder.rotation)
+        {
+            this.grinder.rotation.z = - this.game.ticker.elapsedScaled * 0.75
+        }
 
         // Anvil
-        const time = this.game.ticker.elapsedScaled * this.anvil.frequency + Math.PI * 0.25
-        this.anvil.hammer.rotation.x = Math.pow(1 - Math.abs(Math.sin(time)), 5) - 1
+        if(this.anvil)
+        {
+            try
+            {
+                if(this.anvil.hammer && this.anvil.hammer.rotation)
+                {
+                    const time = this.game.ticker.elapsedScaled * (this.anvil.frequency || 1) + Math.PI * 0.25
+                    this.anvil.hammer.rotation.x = Math.pow(1 - Math.abs(Math.sin(time)), 5) - 1
 
-        // Anvil sound
-        const loopTime = ((time) / Math.PI) % 1
-        if(loopTime < this.anvil.loopTime)
-            this.sounds.anvil.play()
+                    // Anvil sound
+                    const loopTime = ((time) / Math.PI) % 1
+                    if(loopTime < (this.anvil.loopTime || 0))
+                        this.sounds?.anvil?.play()
 
-        this.anvil.loopTime = loopTime
+                    this.anvil.loopTime = loopTime
+                }
+            }
+            catch(e)
+            {
+                console.warn('[ProjectsArea] anvil update failed:', e)
+            }
+        }
     }
 }

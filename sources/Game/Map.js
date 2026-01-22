@@ -57,6 +57,10 @@ export class Map
 
         for(const item of this.locations.items)
         {
+            // Skip showing specific pins (projects and lab) when building the map
+            if(item.respawnName === 'projects' || item.respawnName === 'lab')
+                continue
+
             const respawn = this.game.respawns.getByName(item.respawnName)
             const mapPosition = this.worldToMap(respawn.position)
 
