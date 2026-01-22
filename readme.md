@@ -1,150 +1,150 @@
-# Folio 2025
+# Portafolio 2025
 
 ![image info](./static/social/share-image.png)
 
-## Setup
+## Configuración
 
-Create `.env` file based on `.env.example`
+Crea un archivo `.env` basado en `.env.example`
 
-Download and install [Node.js](https://nodejs.org/en/download/) then run this followed commands:
+Descarga e instala [Node.js](https://nodejs.org/en/download/) y luego ejecuta estos comandos:
 
 ``` bash
-# Install dependencies
+# Instalar dependencias
 npm install --force
 
-# Serve at localhost:1234
+# Servir en localhost:1234
 npm run dev
 
-# Build for production in the dist/ directory
+# Compilar para producción en el directorio dist/
 npm run build
 ```
 
-## Game loop
+## Bucle del juego
 
 #### 0
 
-- Time
-- Inputs
+- Tiempo
+- Entradas
 
 #### 1
 
-- Player:pre-physics (Inputs)
+- Jugador:pre-física (Entradas)
 
 #### 2
 
-- PhysicalVehicle:pre-physics (Player:pre-physics)
+- Vehículo Físico:pre-física (Jugador:pre-física)
 
 #### 3
 
-- Physics
+- Física
 
 #### 4
 
-- PhysicsWireframe (Physics)
-- Objects (Physics)
+- Estructura de Física (Física)
+- Objetos (Física)
 
 #### 5
 
-- PhysicalVehicle:post-physics (Player:pre-physics)
+- Vehículo Físico:post-física (Jugador:pre-física)
 
 #### 6
 
-- Player:post-physics (Physics, PhysicalVehicle:post-physics)
+- Jugador:post-física (Física, Vehículo Físico:post-física)
 
 #### 7
 
-- View (Inputs, Player:post-physics)
+- Vista (Entradas, Jugador:post-física)
 
 #### 8
 
 - Intro
-- DayCycles
-- YearCycles
-- Weather (DayCycles, YearCycles)
-- Zones (Player:post-physics)
-- VisualVehicle (PhysicalVehicle:post-physics, Inputs, Player:post-physics, View)
+- Ciclos de día
+- Ciclos de año
+- Clima (Ciclos de día, Ciclos de año)
+- Zonas (Jugador:post-física)
+- Vehículo Visual (Vehículo Físico:post-física, Entradas, Jugador:post-física, Vista)
 
 #### 9
 
-- Wind (Weather)
-- Lighting (DayCycles, View)
-- Tornado (DayCycles, PhysicalVehicle)
-- InteractivePoints (Player:post-physics)
-- Tracks (VisualVehicle)
+- Viento (Clima)
+- Iluminación (Ciclos de día, Vista)
+- Tornado (Ciclos de día, Vehículo Físico)
+- Puntos Interactivos (Jugador:post-física)
+- Pistas (Vehículo Visual)
 
 #### 10
 
-- Area++ (View, PhysicalVehicle:post-physics, Player:post-physics, Wind)
-- Foliage (VisualVehicle, View)
-- Fog (View)
-- Reveal (DayCycles)
-- Terrain (Tracks)
-- Trails (PhysicalVehicle)
-- Floor (View)
-- Grass (View, Wind)
-- Leaves (View, PhysicalVehicle)
-- Lightnings (View, Weather)
-- RainLines (View, Weather, Reveal)
-- Snow (View, Weather, Reveal, Tracks)
-- VisualTornado (Tornado)
-- WaterSurface (Weather, View)
-- Benches (Objects)
-- Bricks (Objects)
-- ExplosiveCrates (Objects)
-- Fences (Objects)
-- Lanterns (Objects)
-- Whispers (Player)
+- Área++ (Vista, Vehículo Físico:post-física, Jugador:post-física, Viento)
+- Follaje (Vehículo Visual, Vista)
+- Niebla (Vista)
+- Revelar (Ciclos de día)
+- Terreno (Pistas)
+- Rastros (Vehículo Físico)
+- Suelo (Vista)
+- Pasto (Vista, Viento)
+- Hojas (Vista, Vehículo Físico)
+- Relámpagos (Vista, Clima)
+- Líneas de Lluvia (Vista, Clima, Revelar)
+- Nieve (Vista, Clima, Revelar, Pistas)
+- Tornado Visual (Tornado)
+- Superficie de Agua (Clima, Vista)
+- Bancos (Objetos)
+- Ladrillos (Objetos)
+- Cajas Explosivas (Objetos)
+- Vallas (Objetos)
+- Faroles (Objetos)
+- Susurros (Jugador)
 
 #### 13
 
-- InstancedGroup (Objects, [SpecificObjects])
+- Grupo de instancias (Objetos, [Objetos específicos])
 
 #### 14
 
-- Audio (View, Objects)
-- Notifications
-- Title (PhysicalVehicle:post-physics)
+- Audio (Vista, Objetos)
+- Notificaciones
+- Título (Vehículo Físico:post-física)
 
 #### 998
 
-- Rendering
+- Renderizado
 
 #### 999
 
-- Monitoring
+- Monitoreo
 
 ## Blender
 
-### Export
+### Exportar
 
-- Mute the palette texture node (loaded and set in Three.js `Material` directly)
-- Use corresponding export presets
-- Don't use compression (will be done later)
+- Silencia el nodo de textura de paleta (cargado y configurado en Three.js `Material` directamente)
+- Usa los presets de exportación correspondientes
+- No uses compresión (se hará después)
 
-### Compress
+### Comprimir
 
-Run `npm run compress`
+Ejecuta `npm run compress`
 
-Will do the following
+Hará lo siguiente
 
 #### GLB
 
-- Traverses the `static/` folder looking for glb files (ignoring already compressed files)
-- Compresses embeded texture with `etc1s --quality 255` (lossy, GPU friendly)
-- Generates new files to preserve originals
+- Recorre la carpeta `static/` buscando archivos glb (ignorando archivos ya comprimidos)
+- Comprime la textura incrustada con `etc1s --quality 255` (con pérdida, compatible con GPU)
+- Genera nuevos archivos para preservar los originales
 
-#### Texture files
+#### Archivos de textura
 
-- Traverses the `static/` folder looking for `png|jpg` files (ignoring non-model related folders)
-- Compresses with default preset to `--encode etc1s --qlevel 255` (lossy, GPU friendly) or specific preset according to path
-- Generates new files to preserve originals
+- Recorre la carpeta `static/` buscando archivos `png|jpg` (ignorando carpetas no relacionadas con modelos)
+- Comprime con preset predeterminado a `--encode etc1s --qlevel 255` (con pérdida, compatible con GPU) o preset específico según la ruta
+- Genera nuevos archivos para preservar los originales
 
-#### UI files
+#### Archivos de UI
 
-- Traverses the `static/ui.` folder looking for `png|jpg` files
-- Compresses to WebP
+- Recorre la carpeta `static/ui.` buscando archivos `png|jpg`
+- Comprime a WebP
 
-#### Resources
+#### Recursos
 
 - https://gltf-transform.dev/cli
 - https://github.com/KhronosGroup/KTX-Software?tab=readme-ov-file
