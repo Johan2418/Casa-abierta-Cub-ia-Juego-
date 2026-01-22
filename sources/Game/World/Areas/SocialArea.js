@@ -17,7 +17,7 @@ export class SocialArea extends Area
         if(this.game.debug.active)
         {
             this.debugPanel = this.game.debug.panel.addFolder({
-                title: '👨‍🦲 Social',
+                title: '👥 Social',
                 expanded: false,
             })
         }

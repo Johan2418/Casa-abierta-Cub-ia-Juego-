@@ -17,7 +17,7 @@ export class BowlingArea extends Area
         if(this.game.debug.active)
         {
             this.debugPanel = this.game.debug.panel.addFolder({
-                title: '🎳 Bowling',
+                title: '🎳 Boliche',
                 expanded: false,
             })
         }

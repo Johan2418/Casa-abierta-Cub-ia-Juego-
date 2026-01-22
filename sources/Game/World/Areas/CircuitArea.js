@@ -26,7 +26,7 @@ export class CircuitArea extends Area
         if(this.game.debug.active)
         {
             this.debugPanel = this.game.debug.panel.addFolder({
-                title: '🛞 Circuit',
+                title: '🛞 Circuito',
                 expanded: false,
             })
         }

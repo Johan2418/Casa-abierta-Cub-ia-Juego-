@@ -30,7 +30,7 @@ export class LabArea extends Area
         if(this.game.debug.active)
         {
             this.debugPanel = this.game.debug.panel.addFolder({
-                title: '🧪 Lab',
+                title: '🧪 Pitch Supabase x Club IA',
                 expanded: false,
             })
         }
@@ -40,9 +40,7 @@ export class LabArea extends Area
         // setScroller debe llamarse antes de setSounds porque setSounds usa this.scroller
         this.setScroller()
         this.setSounds()
-        // Temporarily disable the Lab interactive point (removed on request)
-        // this.setInteractivePoint()
-        console.info('[LabArea] interactive point for Lab is temporarily disabled')
+        this.setInteractivePoint()
         this.setInputs()
         this.setCinematic()
         this.setShadeMix()
@@ -176,12 +174,12 @@ export class LabArea extends Area
     {
         this.interactivePoint = this.game.interactivePoints.create(
             this.references.items.get('interactivePoint')[0].position,
-            'Lab',
+            'Pitch Supabase x Club IA',
             InteractivePoints.ALIGN_RIGHT,
             InteractivePoints.STATE_CONCEALED,
             () =>
             {
-                this.open()
+                this.game.menu.open('supabase')
             },
             () =>
             {

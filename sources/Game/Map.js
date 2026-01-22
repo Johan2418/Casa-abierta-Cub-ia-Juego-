@@ -41,24 +41,24 @@ export class Map
     {
         this.locations = {}
         this.locations.items = [
-            { name: 'Achievements', respawnName: 'achievements', offset: { x: 0, y: -0.01 } },
+            { name: 'Logros', respawnName: 'achievements', offset: { x: 0, y: -0.01 } },
             { name: 'Altar', respawnName: 'altar', offset: { x: 0, y: -0.05 } },
-            { name: 'Behind<br /> the scene', respawnName: 'behindTheScene', offset: { x: 0.01, y: 0 } },
-            { name: 'Bowling', respawnName: 'bowling', offset: { x: -0.08, y: 0.03 } },
-            { name: 'Career', respawnName: 'career', offset: { x: 0, y: -0.06 } },
-            { name: 'Circuit', respawnName: 'circuit', offset: { x: -0.08, y: -0.05 } },
-            { name: 'Cookie', respawnName: 'cookie', offset: { x: -0.02, y: -0.01 } },
-            { name: 'Lab', respawnName: 'lab', offset: { x: -0.03, y: 0 } },
-            { name: 'Landing', respawnName: 'landing', offset: { x: 0.02, y: 0 } },
-            { name: 'Projects', respawnName: 'projects', offset: { x: 0, y: -0.02 } },
+            { name: 'Detrás de escena', respawnName: 'behindTheScene', offset: { x: 0.01, y: 0 } },
+            { name: 'Boliche', respawnName: 'bowling', offset: { x: -0.08, y: 0.03 } },
+            { name: 'Carrera', respawnName: 'career', offset: { x: 0, y: -0.06 } },
+            { name: 'Circuito', respawnName: 'circuit', offset: { x: -0.08, y: -0.05 } },
+            { name: 'Lanzamiento oficial', respawnName: 'cookie', offset: { x: -0.02, y: -0.01 } },
+            { name: 'Pitch Supabase x Club IA', respawnName: 'lab', offset: { x: -0.03, y: 0 } },
+            { name: 'Inicio', respawnName: 'landing', offset: { x: 0.02, y: 0 } },
+            { name: 'Proyectos', respawnName: 'projects', offset: { x: 0, y: -0.02 } },
             { name: 'Social', respawnName: 'social', offset: { x: -0.01, y: -0.04 } },
-            { name: 'Time Machine', respawnName: 'timeMachine', offset: { x: 0, y: 0 } },
+            { name: 'Máquina del tiempo', respawnName: 'timeMachine', offset: { x: 0, y: 0 } },
         ]
 
         for(const item of this.locations.items)
         {
-            // Skip showing specific pins (projects and lab) when building the map
-            if(item.respawnName === 'projects' || item.respawnName === 'lab')
+            // Skip showing specific pins (only projects) when building the map
+            if(item.respawnName === 'projects')
                 continue
 
             const respawn = this.game.respawns.getByName(item.respawnName)
