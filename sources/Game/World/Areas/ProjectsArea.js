@@ -26,7 +26,7 @@ export class ProjectsArea extends Area
         if(this.game.debug.active)
         {
             this.debugPanel = this.game.debug.panel.addFolder({
-                title: '🔨 Projects',
+                title: '🔨 Proyectos',
                 expanded: false,
             })
         }

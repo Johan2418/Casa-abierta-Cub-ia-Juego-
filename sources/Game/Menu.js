@@ -58,11 +58,7 @@ export class Menu
         element.addEventListener('click', (event) =>
         {
             event.preventDefault()
-
-            if(this.game.world.areas?.circuit?.state === CircuitArea.STATE_RUNNING || this.game.world.areas?.circuit?.state === CircuitArea.STATE_STARTING)
-                this.open('circuit')
-            else
-                this.open()
+            this.open('home')
         })
         element.addEventListener('keydown', (event) =>
         {
@@ -217,6 +213,12 @@ export class Menu
         item.isOpen = true
         
         this.current = item
+
+        // Lite mode: hide navigation for special pages like 'lanzamiento' or 'supabase'
+        if(item.name === 'lanzamiento' || item.name === 'supabase')
+            this.element.classList.add('is-lite')
+        else
+            this.element.classList.remove('is-lite')
         
         // // Tabs resize
         // if(item.tabs)
@@ -265,6 +267,7 @@ export class Menu
             sound.play(false)
 
         this.element.classList.remove('is-visible')
+        this.element.classList.remove('is-lite')
 
         this.state = Menu.CLOSING
         this.events.trigger('close')

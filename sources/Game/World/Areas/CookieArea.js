@@ -17,7 +17,7 @@ export class CookieArea extends Area
         if(this.game.debug.active)
         {
             this.debugPanel = this.game.debug.panel.addFolder({
-                title: '🍪 Cookie Stand',
+                title: '🍪 Lanzamiento oficial',
                 expanded: false,
             })
         }
@@ -299,12 +299,13 @@ export class CookieArea extends Area
     {
         this.game.interactivePoints.create(
             this.getReference('interactivePoint').position,
-            'Accept cookie',
+            'Lanzamiento oficial',
             InteractivePoints.ALIGN_RIGHT,
             InteractivePoints.STATE_CONCEALED,
             () =>
             {
-                this.accept()
+                    this.accept()
+                    this.game.menu.open('lanzamiento')
             },
             () =>
             {
