@@ -63,6 +63,11 @@ export class Map
                 continue
 
             const respawn = this.game.respawns.getByName(item.respawnName)
+            if(!respawn)
+            {
+                console.warn(`[Map] Missing respawn for '${item.respawnName}', skipping map pin.`)
+                continue
+            }
             const mapPosition = this.worldToMap(respawn.position)
 
             // HTML
@@ -110,6 +115,19 @@ export class Map
         {
             this.texture.element.classList.add('is-visible')
         })
+
+        // If the image fails to load, fall back to a default map and log the error so we can diagnose missing assets
+        this.texture.element.addEventListener('error', () =>
+        {
+            console.warn('[Map] Texture failed to load, falling back to default map image')
+            const def = this.game.dayCycles.intervalEvents.get('night').inInterval ? 'ui/map/map-night.webp' : 'ui/map/map-day.webp'
+            if(this.texture.previousUrl !== def)
+            {
+                this.texture.element.classList.remove('is-visible')
+                this.texture.previousUrl = def
+                this.texture.element.src = def
+            }
+        })
         
         this.texture.update = () =>
         {
@@ -136,6 +154,18 @@ export class Map
         {
             event.preventDefault()
         })
+
+        // Also attach any in-map open buttons ('.js-open-map') to open the map modal
+        const inMapButtons = this.game.domElement.querySelectorAll('.js-open-map')
+        for(const btn of inMapButtons)
+        {
+            btn.addEventListener('click', (ev) =>
+            {
+                ev.stopPropagation()
+                this.game.modals.open('map')
+            })
+            btn.addEventListener('keydown', (ev) => { ev.preventDefault() })
+        }
     }
 
     setInputs()
