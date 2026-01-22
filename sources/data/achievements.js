@@ -5,28 +5,28 @@ export default
 [
     [
         'landingLeave',
-        'I’m going on an adventure!',
-        'Get out of the landing area.',
+        '¡Voy a vivir una aventura!',
+        'Sal del área de desembarque.',
         1
     ],
     [
         'areas',
-        'Traveler',
-        'Vist every area.',
+        'Viajero',
+        'Visita todos los áreas.',
         13,
         true // Unique
     ],
     [
         'projects',
-        'But can you fix the wifi?',
-        'Check every project in the <strong>projects</strong> area.',
+        '¿Pero puedes reparar el wifi?',
+        'Revisa cada proyecto en el área de <strong>proyectos</strong>.',
         projectsData.length,
         true // Unique
     ],
     [
         'lab',
-        'I\'m a bit of a scientist myself',
-        'Check every project in the <strong>lab</strong> area.',
+        'Yo también soy un poco científico',
+        'Revisa cada proyecto en el área de <strong>laboratorio</strong>.',
         labData.length,
         true // Unique
     ],
